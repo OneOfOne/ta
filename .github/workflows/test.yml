@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: goanpeca/setup-miniconda@v1
       with:
-        miniconda-version: "latest"
+        auto-update-conda: true
         python-version: 3.5
     - name: Install Python Deps
       run: |
