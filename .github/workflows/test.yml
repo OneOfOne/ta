@@ -7,19 +7,28 @@ jobs:
         go-version: [1.14.x, 1.15.x]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
+
     steps:
+
     - uses: goanpeca/setup-miniconda@v1
       with:
         auto-update-conda: true
         python-version: 3.5
+        activate-environment: ta
+
     - name: Install Python Deps
+      shell: bash -l {0}
       run: |
         conda install -c quantopian ta-lib
+
     - name: Install Go Deps
       uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go-version }}
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Test
+      shell: bash -l {0}
       run: go test ./...
