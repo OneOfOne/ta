@@ -14,8 +14,10 @@ import (
 	"go.oneofone.dev/ta/decimal"
 )
 
-func a2s(a TA) string { // go float64 array to python list initializer string
-	return strings.Replace(fmt.Sprintf("%.40f", a), " ", ",", -1)
+var noPython bool
+
+func a2s(a *TA) string { // go float64 array to python list initializer string
+	return strings.Replace(fmt.Sprintf("%.40f", a.v), " ", ",", -1)
 }
 
 func round(input float64) float64 {
@@ -43,8 +45,11 @@ func check(tb testing.TB, err error, output ...[]byte) {
 }
 
 // modified version of https://github.com/markcheno/go-talib
-func compare(t *testing.T, res TA, taCall string, args ...interface{}) {
+func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 	t.Helper()
+	if noPython {
+		t.Skip("this test requires python")
+	}
 	pyprog := fmt.Sprintf(progSrc, fmt.Sprintf(taCall, args...))
 
 	// fmt.Println(pyprog)
@@ -54,19 +59,19 @@ func compare(t *testing.T, res TA, taCall string, args ...interface{}) {
 	check(t, err, pyOut)
 
 	tmp := strings.Fields(string(pyOut))
-	pyres := make(TA, 0, len(tmp))
+	pyres := NewSize(len(tmp), true)
 	for _, arg := range tmp {
 		if n, err := strconv.ParseFloat(arg, 64); err == nil {
-			pyres = append(pyres, F(n))
+			pyres.Append(F(n), false)
 		}
 	}
 
-	if len(res) < len(pyres) {
-		pyres = pyres.Slice(-len(res), 0)
+	if res.Len() < pyres.Len() {
+		pyres = pyres.Slice(-res.Len(), 0)
 	}
 
-	for i := 0; i < len(res); i++ {
-		gr, pr := res[i], pyres[i]
+	for i := 0; i < res.Len(); i++ {
+		gr, pr := res.At(i), pyres.At(i)
 		if gr.IsNaN() {
 			gr = 0.0
 		}
@@ -74,8 +79,8 @@ func compare(t *testing.T, res TA, taCall string, args ...interface{}) {
 		if !decimal.EqualApprox(gr.Float(), pr.Float(), 1e-6) {
 			t.Fatalf("[@%d] got %#v, expected %#v (diff %.20f)\ngo: %v\npy: %v",
 				i, gr, pr, gr.Sub(pr).Abs(),
-				res[MaxInt(0, i-4):MinInt(len(res), i+4)],
-				pyres[MaxInt(0, i-4):MinInt(len(pyres), i+4)])
+				res.Slice(MaxInt(0, i-4), MinInt(res.Len(), i+4)),
+				pyres.Slice(MaxInt(0, i-4), MinInt(pyres.Len(), i+4)))
 		}
 	}
 }
@@ -85,8 +90,8 @@ func TestMain(m *testing.M) {
 	log.SetFlags(log.Lshortfile)
 	pyout, _ := exec.Command("python", "-c", "import talib; print('success')").Output()
 	if string(pyout[0:7]) != "success" {
-		fmt.Println("python and talib must be installed to run tests")
-		os.Exit(-1)
+		log.Println("python and talib must be installed to run most of the tests.")
+		noPython = true
 	}
 	os.Exit(m.Run())
 }
@@ -173,14 +178,14 @@ func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
 		}
 		t.Run(strconv.Itoa(period), func(t *testing.T) {
 			res, _ := testClose.MovingAverage(fn, period)
-			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 			ma := fn(period)
-			cmp := testClose.Apply(ma.Update, false).Slice(-res.Len(), 0)
+			cmp := testClose.Map(ma.Update, false).Slice(-res.Len(), 0)
 			if !cmp.Equal(res) {
 				t.Log(res)
 				t.Log(cmp)
 				t.Fatal()
 			}
+			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}
 }

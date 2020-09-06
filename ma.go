@@ -6,42 +6,42 @@ package ta // import "go.oneofone.dev/ta"
 
 type MovingAverageFunc func(period int) Live
 
-func (sl TA) MovingAverage(fn MovingAverageFunc, period int) (TA, Live) {
+func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, Live) {
 	ma := fn(period)
-	return ma.Setup(sl), ma
+	return ma.Setup(ta), ma
 }
 
 // SMA - Simple Moving Average
-func (sl TA) SMA(period int) (TA, Live) {
-	return sl.MovingAverage(SMA, period)
+func (ta *TA) SMA(period int) (*TA, Live) {
+	return ta.MovingAverage(SMA, period)
 }
 
 // SMA - Simple Moving Average
 func SMA(period int) Live {
 	checkPeriod(period, 2)
 	return &liveSMA{
-		data:   make(TA, period),
+		data:   NewSize(period, false),
 		period: period,
 	}
 }
 
 type liveSMA struct {
-	data   TA
+	data   *TA
 	sum    F
 	period int
 	idx    int
 	count  int
 }
 
-func (l *liveSMA) Setup(d TA) TA {
-	return d.Apply(l.Update, false).Slice(-l.period+1, 0)
+func (l *liveSMA) Setup(d *TA) *TA {
+	return d.Map(l.Update, false).Slice(-l.period+1, 0)
 }
 
 func (l *liveSMA) Update(v F) F {
 	l.idx = (l.idx + 1) % l.period
 	// prev := l.data[l.idx]
-	prev := l.data[l.idx]
-	l.data[l.idx] = v
+	prev := l.data.At(l.idx)
+	l.data.SetAt(l.idx, v)
 
 	if l.count < l.period {
 		l.count++
@@ -60,8 +60,8 @@ func (l *liveSMA) Clone() Live {
 }
 
 // EMA - Exponential Moving Average
-func (sl TA) EMA(period int) (TA, Live) {
-	return sl.MovingAverage(EMA, period)
+func (ta *TA) EMA(period int) (*TA, Live) {
+	return ta.MovingAverage(EMA, period)
 }
 
 // EMA - Exponential Moving Average
@@ -90,10 +90,10 @@ type liveEMA struct {
 	set    bool
 }
 
-func (l *liveEMA) Setup(d TA) TA {
+func (l *liveEMA) Setup(d *TA) *TA {
 	l.set = true
 	l.prevMA = d.Slice(0, l.period).Avg()
-	d = d.Slice(l.period, 0).Apply(l.Update, false)
+	d = d.Slice(l.period, 0).Map(l.Update, false)
 	return d
 }
 
@@ -123,8 +123,8 @@ func (l *liveEMA) copy() liveEMA {
 }
 
 // WMA - Exponential Moving Average
-func (sl TA) WMA(period int) (TA, Live) {
-	return sl.MovingAverage(WMA, period)
+func (ta *TA) WMA(period int) (*TA, Live) {
+	return ta.MovingAverage(WMA, period)
 }
 
 // WMA - Exponential Moving Average
@@ -138,14 +138,14 @@ func WMA(period int) Live {
 func CustomWMA(period int, weight F) Live {
 	checkPeriod(period, 2)
 	return &liveWMA{
-		data:   make(TA, period),
+		data:   NewSize(period, false),
 		weight: weight,
 		period: period,
 	}
 }
 
 type liveWMA struct {
-	data        TA
+	data        *TA
 	weight      F
 	sum         F
 	weightedSum F
@@ -154,24 +154,24 @@ type liveWMA struct {
 	set         bool
 }
 
-func (l *liveWMA) Setup(d TA) TA {
+func (l *liveWMA) Setup(d *TA) *TA {
 	l.set = true
 	var sum, wsum F
 	for i := 0; i < l.period-1; i++ {
-		v := d[i]
+		v := d.At(i)
 		wsum += v * F(i+1)
 		sum += v
-		l.data[i] = v
+		l.data.SetAt(i, v)
 	}
 	l.sum, l.weightedSum = sum, wsum
 	l.idx = l.period - 2
-	d = d.Slice(l.period-1, 0).Apply(l.Update, false)
+	d = d.Slice(l.period-1, 0).Map(l.Update, false)
 	return d
 }
 
 func (l *liveWMA) Update(v F) F {
 	if !l.set {
-		l.data[l.idx] = v
+		l.data.SetAt(l.idx, v)
 		if l.idx < l.period-1 {
 			l.idx++
 			l.weightedSum += v * F(l.idx)
@@ -182,14 +182,14 @@ func (l *liveWMA) Update(v F) F {
 		l.set = true
 	}
 	l.idx = (l.idx + 1) % l.period
-	l.data[l.idx] = v
+	l.data.SetAt(l.idx, v)
 	l.weightedSum += v * F(l.period)
 	l.sum += v
 	rv := l.weightedSum / l.weight
 	l.weightedSum -= l.sum
 
 	pidx := (l.idx + 1) % l.period
-	l.sum -= l.data[pidx]
+	l.sum -= l.data.At(pidx)
 	return rv
 }
 
@@ -202,8 +202,8 @@ func (l *liveWMA) Clone() Live {
 }
 
 // DEMA - Double Exponential Moving Average
-func (sl TA) DEMA(period int) (TA, Live) {
-	return sl.MovingAverage(DEMA, period)
+func (ta *TA) DEMA(period int) (*TA, Live) {
+	return ta.MovingAverage(DEMA, period)
 }
 
 // DEMA - Double Exponential Moving Average
@@ -222,7 +222,7 @@ type liveDEMA struct {
 	idx    int
 }
 
-func (l *liveDEMA) Setup(d TA) TA { return d.Apply(l.Update, false).Slice(-l.period, 0) }
+func (l *liveDEMA) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
 
 func (l *liveDEMA) Update(v F) F {
 	e1 := l.e1.Update(v)
@@ -246,8 +246,8 @@ func (l *liveDEMA) Clone() Live {
 }
 
 // TEMA - Triple Exponential Moving Average
-func (sl TA) TEMA(period int) (TA, Live) {
-	return sl.MovingAverage(TEMA, period)
+func (ta *TA) TEMA(period int) (*TA, Live) {
+	return ta.MovingAverage(TEMA, period)
 }
 
 // TEMA - Triple Exponential Moving Average
@@ -268,7 +268,7 @@ type liveTEMA struct {
 	max3       int
 }
 
-func (l *liveTEMA) Setup(d TA) TA { return d.Apply(l.Update, false).Slice(-l.period, 0) }
+func (l *liveTEMA) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
 
 func (l *liveTEMA) Update(v F) F {
 	e1 := l.e1.Update(v)

@@ -3,8 +3,8 @@ package ta
 import "math"
 
 // RSI - Simple Moving Average
-func (sl TA) RSI(period int) (TA, Live) {
-	return sl.MovingAverage(RSI, period)
+func (ta *TA) RSI(period int) (*TA, Live) {
+	return ta.MovingAverage(RSI, period)
 }
 
 // RSI - Simple Moving Average
@@ -25,8 +25,8 @@ type liveRSI struct {
 	idx        int
 }
 
-func (l *liveRSI) Setup(d TA) TA {
-	return d.Apply(l.Update, false).Slice(-l.period+1, 0)
+func (l *liveRSI) Setup(d *TA) *TA {
+	return d.Map(l.Update, false).Slice(-l.period+1, 0)
 }
 
 func (l *liveRSI) Update(v F) F {
@@ -72,24 +72,24 @@ func (l *liveRSI) Clone() Live {
 }
 
 type LiveMACD interface {
-	Setup(TA) (TA, TA, TA)
+	Setup(*TA) (*TA, *TA, *TA)
 	Update(v F) (F, F, F)
 	Len() (int, int, int)
 	Clone() LiveMACD
 }
 
 // MACD - Moving Average Convergence/Divergence, using EMA
-func (sl TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist TA, ma LiveMACD) {
+func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, ma LiveMACD) {
 	ma = MACD(fastPeriod, slowPeriod, signalPeriod)
-	macd, signal, hist = ma.Setup(sl)
+	macd, signal, hist = ma.Setup(ta)
 	return
 	// return sl.MovingAverage(MACD, period)
 }
 
 // MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func (sl TA) MACDExt(fastMA, slowMA, signalMA Live) (macd, signal, hist TA, ma LiveMACD) {
+func (ta *TA) MACDExt(fastMA, slowMA, signalMA Live) (macd, signal, hist *TA, ma LiveMACD) {
 	ma = MACDExt(fastMA, slowMA, signalMA)
-	macd, signal, hist = ma.Setup(sl)
+	macd, signal, hist = ma.Setup(ta)
 	return
 	// return sl.MovingAverage(MACD, period)
 }
@@ -118,12 +118,16 @@ type liveMACD struct {
 	prev F
 }
 
-func (l *liveMACD) Setup(d TA) (macd, signal, hist TA) {
-	macd = make(TA, d.Len())
-	signal = make(TA, d.Len())
-	hist = make(TA, d.Len())
-	for i, v := range d {
-		macd[i], signal[i], hist[i] = l.Update(v)
+func (l *liveMACD) Setup(d *TA) (macd, signal, hist *TA) {
+	macd = NewSize(d.Len(), false)
+	signal = NewSize(d.Len(), false)
+	hist = NewSize(d.Len(), false)
+	for i := 0; i < d.Len(); i++ {
+		v := d.At(i)
+		a, b, c := l.Update(v)
+		macd.SetAt(i, a)
+		signal.SetAt(i, b)
+		hist.SetAt(i, c)
 	}
 	macd = macd.Slice(-l.signal.Len(), 0)
 	signal = signal.Slice(-l.signal.Len(), 0)
