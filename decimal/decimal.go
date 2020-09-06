@@ -217,7 +217,7 @@ func (d *Decimal) UnmarshalText(p []byte) (err error) {
 }
 
 func (d Decimal) String() string {
-	return d.Text('g', 17)
+	return d.Text('g', 20)
 }
 
 func (d Decimal) Text(fmt byte, prec int) string {

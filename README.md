@@ -15,6 +15,17 @@ A Go Technical Analysis library, mostly inspired by python's [TA-Lib](https://py
 go get -u go.oneofone.dev/ta
 ```
 
+## Status: **PRE ALPHA**
+
+* the API is not stable at all
+* Missing a lot of indicators compared to the python version or markcheno's port
+
+## TODO
+
+* Port more functions
+* More testing / benchmarks
+* Stablize the API
+
 ## Example
 
 ```go
@@ -29,7 +40,7 @@ import (
 func main() {
 	spy, _ := quote.NewQuoteFromYahoo("spy", "2016-01-01", "2016-04-01", quote.Daily, true)
 	fmt.Print(spy.CSV())
-	dema, _ := ta.FromFloats(spy.Close).DEMA(10)
+	dema, _ := ta.New(spy.Close).DEMA(10)
 	fmt.Println(dema)
 }
 ```
@@ -43,4 +54,4 @@ func main() {
 
 ## License
 
-MIT License
+[BSD License](LICENSE)
