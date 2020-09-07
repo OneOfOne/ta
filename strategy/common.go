@@ -58,7 +58,7 @@ func MACDExt(fast, slow, signal ta.Study) Strategy {
 }
 
 type macd struct {
-	macd ta.LiveMACD
+	macd ta.MACDStudy
 	last ta.Decimal
 	idx  int
 	dir  int8

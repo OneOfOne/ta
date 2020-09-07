@@ -93,15 +93,15 @@ func (l *liveRSI) Clone() Study {
 	return &cp
 }
 
-type LiveMACD interface {
+type MACDStudy interface {
 	Setup(*TA) (*TA, *TA, *TA)
 	Update(v Decimal) (Decimal, Decimal, Decimal)
 	Len() (int, int, int)
-	Clone() LiveMACD
+	Clone() MACDStudy
 }
 
 // MACD - Moving Average Convergence/Divergence, using EMA
-func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, ma LiveMACD) {
+func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, ma MACDStudy) {
 	ma = MACD(fastPeriod, slowPeriod, signalPeriod)
 	macd, signal, hist = ma.Setup(ta)
 	return
@@ -109,7 +109,7 @@ func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist
 }
 
 // MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func (ta *TA) MACDExt(fastMA, slowMA, signalMA Study) (macd, signal, hist *TA, ma LiveMACD) {
+func (ta *TA) MACDExt(fastMA, slowMA, signalMA Study) (macd, signal, hist *TA, ma MACDStudy) {
 	ma = MACDExt(fastMA, slowMA, signalMA)
 	macd, signal, hist = ma.Setup(ta)
 	return
@@ -117,12 +117,12 @@ func (ta *TA) MACDExt(fastMA, slowMA, signalMA Study) (macd, signal, hist *TA, m
 }
 
 // MACD - Moving Average Convergence/Divergence, usign EMA
-func MACD(fastPeriod, slowPeriod, signalPeriod int) LiveMACD {
+func MACD(fastPeriod, slowPeriod, signalPeriod int) MACDStudy {
 	return MACDExt(EMA(fastPeriod), EMA(slowPeriod), EMA(signalPeriod))
 }
 
 // MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func MACDExt(fast, slow, signal Study) LiveMACD {
+func MACDExt(fast, slow, signal Study) MACDStudy {
 	if slow.Len() < fast.Len() {
 		slow, fast = fast, slow
 	}
@@ -169,6 +169,6 @@ func (l *liveMACD) Len() (int, int, int) {
 	return l.slow.Len(), l.fast.Len(), l.signal.Len()
 }
 
-func (l *liveMACD) Clone() LiveMACD {
+func (l *liveMACD) Clone() MACDStudy {
 	panic("x")
 }
