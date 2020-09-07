@@ -1,8 +1,6 @@
 package csvticks
 
 import (
-	"compress/gzip"
-	"io"
 	"testing"
 )
 
@@ -11,9 +9,7 @@ func TestTicks(t *testing.T) {
 	defer SetDefaultTimeFormat(SetDefaultTimeFormat("2006-01-02 15:04:05"))
 
 	ticks, err := Load(fname, Mapping{
-		Decoder: func(r io.Reader) (io.Reader, error) {
-			return gzip.NewReader(r)
-		},
+		Decoder: GzipDecoder,
 
 		FillSymbol: "AAPL",
 		TS:         CSVIndex(0),

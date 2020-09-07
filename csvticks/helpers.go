@@ -28,7 +28,7 @@ var (
 	defaultTimeFmt atomic.Value
 )
 
-func GzipDecoder(r io.Reader) (io.ReadCloser, error) {
+func GzipDecoder(r io.Reader) (io.Reader, error) {
 	return gzip.NewReader(r)
 }
 
