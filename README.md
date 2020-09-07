@@ -1,6 +1,8 @@
 # ta
 
-[![GoDoc](https://godoc.org/go.oneofone.dev/ta?status.svg)](https://godoc.org/go.oneofone.dev/ta)
+[![PkgGoDev](https://pkg.go.dev/badge/go.oneofone.dev/ta)](https://pkg.go.dev/go.oneofone.dev/ta)
+[![testing](https://github.com/OneOfOne/ta/workflows/testing/badge.svg)](https://github.com/OneOfOne/ta/actions)
+[![Coverage Status](https://coveralls.io/repos/github/OneOfOne/ta/badge.svg?branch=master)](https://coveralls.io/github/OneOfOne/ta?branch=master)
 
 A Go Technical Analysis library, mostly inspired by python's [TA-Lib](https://pypi.org/project/TA-Lib/) and the port by [markcheno](https://github.com/markcheno/go-talib).
 
