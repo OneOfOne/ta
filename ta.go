@@ -7,13 +7,6 @@ import (
 	"gonum.org/v1/gonum/floats"
 )
 
-type Live interface {
-	Setup(d *TA) *TA
-	Update(v Decimal) Decimal
-	Len() int
-	Clone() Live
-}
-
 // Decimal is an alias to the underlying type we use.
 // For now it's mostly a wrapper around float64,
 // however it may change to big.Float in the future if higher accuracy is needed.
@@ -161,6 +154,12 @@ func (ta *TA) Len() int { return len(ta.v) }
 func (ta *TA) Floats() []float64 {
 	// this must be changed if decimal != float64
 	return *(*[]float64)(unsafe.Pointer(&ta.v))
+}
+
+// Data returns the underlying data slice
+// if ta is capped, the data wil *not* be in order
+func (ta *TA) Data() []Decimal {
+	return ta.v
 }
 
 func (ta *TA) Copy() *TA {

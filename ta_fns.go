@@ -2,6 +2,30 @@ package ta
 
 import "math"
 
+func AvgOf(tas ...*TA) *TA {
+	if len(tas) == 0 {
+		return nil
+	}
+
+	ln := tas[0].Len()
+	for i := 1; i < len(tas); i++ {
+		if tas[i].Len() != ln {
+			panic("all input TAs must have equal size")
+		}
+	}
+
+	out := NewSize(ln, true)
+	for i := 0; i < ln; i++ {
+		var v Decimal
+		for _, ta := range tas {
+			v = v.Add(ta.At(i))
+		}
+		out.Append(v / Decimal(ln))
+	}
+
+	return out
+}
+
 // FloatsTMAma - Triangular Moving Average
 // func FloatsTriMA(data []float64, period int) []float64 {
 // 	return FromFloats(data).Trima(period).Floats()

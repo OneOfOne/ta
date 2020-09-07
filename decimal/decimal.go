@@ -113,6 +113,22 @@ func (d Decimal) Atan() Decimal {
 	return Decimal(v)
 }
 
+func (d Decimal) Floor(unit Decimal) Decimal {
+	if unit == 0 || unit == 1 {
+		return Decimal(math.Floor(d.Float()))
+	}
+	d = d * unit
+	return Decimal(math.Floor(d.Float())) / unit
+}
+
+func (d Decimal) Round(unit Decimal) Decimal {
+	if unit == 0 || unit == 1 {
+		return Decimal(math.Round(d.Float()))
+	}
+	d = d * unit
+	return Decimal(math.Round(d.Float())) / unit
+}
+
 // Pow uses shopspring/decimal if n < 10, otherwise a simple loop
 func (d Decimal) Pow(n int) Decimal {
 	v := math.Pow(float64(d), float64(n))
@@ -226,4 +242,49 @@ func (d Decimal) Text(fmt byte, prec int) string {
 
 func EqualApprox(a, b, epsilon float64) bool {
 	return scalar.EqualWithinAbsOrRel(a, b, epsilon, epsilon)
+}
+
+func AvgOf(vs ...Decimal) Decimal {
+	var out Decimal
+	for _, v := range vs {
+		out = out.Add(v)
+	}
+	return out / Decimal(len(vs))
+}
+
+func Min(vs ...Decimal) Decimal {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func Max(vs ...Decimal) Decimal {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+type RandSource = interface {
+	Int63n(int64) int64
+}
+
+func RandRange(r RandSource, min, max Decimal) (out Decimal) {
+	if max < min {
+		min, max = max, min
+	}
+
+again:
+	f := float64(r.Int63n(1<<53)) / (1 << 53)
+	if f == 1 {
+		goto again // resample; this branch is taken O(never)
+	}
+	return min + Decimal(f)*(max-min)
 }

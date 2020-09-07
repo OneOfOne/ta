@@ -1,23 +1,20 @@
 package ta // import "go.oneofone.dev/ta"
 
-// ref: https://github.com/TulipCharts/tulipindicators/tree/master/indicators
-
 // MovingAverageFunc defines a function that returns am updatable moving average for the given period
+type MovingAverageFunc func(period int) Study
 
-type MovingAverageFunc func(period int) Live
-
-func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, Live) {
+func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, Study) {
 	ma := fn(period)
 	return ma.Setup(ta), ma
 }
 
 // SMA - Simple Moving Average
-func (ta *TA) SMA(period int) (*TA, Live) {
+func (ta *TA) SMA(period int) (*TA, Study) {
 	return ta.MovingAverage(SMA, period)
 }
 
 // SMA - Simple Moving Average
-func SMA(period int) Live {
+func SMA(period int) Study {
 	checkPeriod(period, 2)
 	return &liveSMA{
 		data:   NewSize(period, false),
@@ -49,25 +46,25 @@ func (l *liveSMA) Update(v Decimal) Decimal {
 
 func (l *liveSMA) Len() int { return l.period }
 
-func (l *liveSMA) Clone() Live {
+func (l *liveSMA) Clone() Study {
 	cp := *l
 	cp.data = l.data.Copy()
 	return &cp
 }
 
 // EMA - Exponential Moving Average
-func (ta *TA) EMA(period int) (*TA, Live) {
+func (ta *TA) EMA(period int) (*TA, Study) {
 	return ta.MovingAverage(EMA, period)
 }
 
 // EMA - Exponential Moving Average
 // An alias for CustomEMA(period, 2 / (period+1))
-func EMA(period int) Live {
+func EMA(period int) Study {
 	return CustomEMA(period, 0)
 }
 
 // CustomEMA - returns an updatable EMA with the given k
-func CustomEMA(period int, k Decimal) Live {
+func CustomEMA(period int, k Decimal) Study {
 	checkPeriod(period, 2)
 	if k == 0 {
 		k = Decimal(2 / float64(period+1))
@@ -109,7 +106,7 @@ func (l *liveEMA) Update(v Decimal) Decimal {
 
 func (l *liveEMA) Len() int { return l.period }
 
-func (l *liveEMA) Clone() Live {
+func (l *liveEMA) Clone() Study {
 	cp := *l
 	return &cp
 }
@@ -119,19 +116,19 @@ func (l *liveEMA) copy() liveEMA {
 }
 
 // WMA - Exponential Moving Average
-func (ta *TA) WMA(period int) (*TA, Live) {
+func (ta *TA) WMA(period int) (*TA, Study) {
 	return ta.MovingAverage(WMA, period)
 }
 
 // WMA - Exponential Moving Average
 // An alias for CustomWMA(period, (period * (period + 1)) >> 1)
-func WMA(period int) Live {
+func WMA(period int) Study {
 	w := Decimal((period * (period + 1)) >> 1)
 	return CustomWMA(period, w)
 }
 
 // CustomWMA returns an updatable WMA with the given weight
-func CustomWMA(period int, weight Decimal) Live {
+func CustomWMA(period int, weight Decimal) Study {
 	checkPeriod(period, 2)
 	return &liveWMA{
 		data:   NewSize(period, false),
@@ -191,19 +188,19 @@ func (l *liveWMA) Update(v Decimal) Decimal {
 
 func (l *liveWMA) Len() int { return l.period }
 
-func (l *liveWMA) Clone() Live {
+func (l *liveWMA) Clone() Study {
 	cp := *l
 	cp.data = l.data.Copy()
 	return &cp
 }
 
 // DEMA - Double Exponential Moving Average
-func (ta *TA) DEMA(period int) (*TA, Live) {
+func (ta *TA) DEMA(period int) (*TA, Study) {
 	return ta.MovingAverage(DEMA, period)
 }
 
 // DEMA - Double Exponential Moving Average
-func DEMA(period int) Live {
+func DEMA(period int) Study {
 	checkPeriod(period, 2)
 	e1 := EMA(period).(*liveEMA)
 	return &liveDEMA{
@@ -234,7 +231,7 @@ func (l *liveDEMA) Update(v Decimal) Decimal {
 
 func (l *liveDEMA) Len() int { return l.period }
 
-func (l *liveDEMA) Clone() Live {
+func (l *liveDEMA) Clone() Study {
 	cp := *l
 	cp.e1 = cp.e1.copy()
 	cp.e2 = cp.e2.copy()
@@ -242,12 +239,12 @@ func (l *liveDEMA) Clone() Live {
 }
 
 // TEMA - Triple Exponential Moving Average
-func (ta *TA) TEMA(period int) (*TA, Live) {
+func (ta *TA) TEMA(period int) (*TA, Study) {
 	return ta.MovingAverage(TEMA, period)
 }
 
 // TEMA - Triple Exponential Moving Average
-func TEMA(period int) Live {
+func TEMA(period int) Study {
 	checkPeriod(period, 2)
 	e1 := EMA(period).(*liveEMA)
 	return &liveTEMA{
@@ -282,7 +279,7 @@ func (l *liveTEMA) Update(v Decimal) Decimal {
 
 func (l *liveTEMA) Len() int { return l.period }
 
-func (l *liveTEMA) Clone() Live {
+func (l *liveTEMA) Clone() Study {
 	cp := *l
 	cp.e1 = *(l.e1.Clone().(*liveEMA))
 	cp.e2 = *(l.e2.Clone().(*liveEMA))

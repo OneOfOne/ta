@@ -3,13 +3,15 @@ package ta
 import (
 	"math/rand"
 	"testing"
+
+	"go.oneofone.dev/ta/decimal"
 )
 
 func randSlice(size int, seed int64, min, max Decimal) *TA {
 	r := rand.New(rand.NewSource(seed))
 	out := NewSize(size, true)
 	for i := 0; i < size; i++ {
-		v := RandInRange(r, min, max)
+		v := decimal.RandRange(r, min, max)
 		out.Append(v)
 	}
 

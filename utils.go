@@ -4,23 +4,6 @@ import (
 	"strconv"
 )
 
-type RandSource = interface {
-	Int63n(int64) int64
-}
-
-func RandInRange(r RandSource, min, max Decimal) (out Decimal) {
-	if max < min {
-		min, max = max, min
-	}
-
-again:
-	f := float64(r.Int63n(1<<53)) / (1 << 53)
-	if f == 1 {
-		goto again // resample; this branch is taken O(never)
-	}
-	return min + Decimal(f)*(max-min)
-}
-
 func AbsInt(a int) int {
 	if a < 0 {
 		return -a
@@ -33,26 +16,6 @@ func AbsInt64(a int) int {
 		return -a
 	}
 	return a
-}
-
-func Min(vs ...Decimal) Decimal {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func Max(vs ...Decimal) Decimal {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v > m {
-			m = v
-		}
-	}
-	return m
 }
 
 func MinInt(vs ...int) int {

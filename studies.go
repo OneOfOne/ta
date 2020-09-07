@@ -2,13 +2,20 @@ package ta
 
 import "math"
 
-// RSI - Simple Moving Average
-func (ta *TA) RSI(period int) (*TA, Live) {
+type Study interface {
+	Setup(d *TA) *TA
+	Update(v Decimal) Decimal
+	Len() int
+	Clone() Study
+}
+
+// RSI - Relative Strength Index
+func (ta *TA) RSI(period int) (*TA, Study) {
 	return ta.MovingAverage(RSI, period)
 }
 
-// RSI - Simple Moving Average
-func RSI(period int) Live {
+// RSI - Relative Strength Index
+func RSI(period int) Study {
 	checkPeriod(period, 2)
 	return &liveRSI{
 		period: period,
@@ -16,7 +23,19 @@ func RSI(period int) Live {
 	}
 }
 
+// RSIExt - Relative Strength Index using a different moving average func
+func RSIExt(ma Study) Study {
+	period := ma.Len()
+	checkPeriod(period, 2)
+	return &liveRSI{
+		ext:    ma,
+		period: period,
+		per:    1 / Decimal(period),
+	}
+}
+
 type liveRSI struct {
+	ext        Study
 	prev       Decimal
 	smoothUp   Decimal
 	smoothDown Decimal
@@ -30,6 +49,9 @@ func (l *liveRSI) Setup(d *TA) *TA {
 }
 
 func (l *liveRSI) Update(v Decimal) Decimal {
+	if l.ext != nil {
+		v = l.ext.Update(v)
+	}
 	if l.idx == 0 {
 		l.idx++
 		l.prev = v
@@ -66,7 +88,7 @@ func (l *liveRSI) Update(v Decimal) Decimal {
 
 func (l *liveRSI) Len() int { return l.period }
 
-func (l *liveRSI) Clone() Live {
+func (l *liveRSI) Clone() Study {
 	cp := *l
 	return &cp
 }
@@ -87,7 +109,7 @@ func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist
 }
 
 // MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func (ta *TA) MACDExt(fastMA, slowMA, signalMA Live) (macd, signal, hist *TA, ma LiveMACD) {
+func (ta *TA) MACDExt(fastMA, slowMA, signalMA Study) (macd, signal, hist *TA, ma LiveMACD) {
 	ma = MACDExt(fastMA, slowMA, signalMA)
 	macd, signal, hist = ma.Setup(ta)
 	return
@@ -100,7 +122,7 @@ func MACD(fastPeriod, slowPeriod, signalPeriod int) LiveMACD {
 }
 
 // MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func MACDExt(fast, slow, signal Live) LiveMACD {
+func MACDExt(fast, slow, signal Study) LiveMACD {
 	if slow.Len() < fast.Len() {
 		slow, fast = fast, slow
 	}
@@ -113,7 +135,7 @@ func MACDExt(fast, slow, signal Live) LiveMACD {
 }
 
 type liveMACD struct {
-	slow, fast, signal Live
+	slow, fast, signal Study
 
 	prev Decimal
 }
