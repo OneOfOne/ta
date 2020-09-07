@@ -1,7 +1,6 @@
 package ta
 
 import (
-	"math"
 	"strconv"
 )
 
@@ -9,7 +8,7 @@ type RandSource = interface {
 	Int63n(int64) int64
 }
 
-func RandInRange(r RandSource, min, max F) (out F) {
+func RandInRange(r RandSource, min, max Decimal) (out Decimal) {
 	if max < min {
 		min, max = max, min
 	}
@@ -19,7 +18,7 @@ again:
 	if f == 1 {
 		goto again // resample; this branch is taken O(never)
 	}
-	return min + F(f)*(max-min)
+	return min + Decimal(f)*(max-min)
 }
 
 func AbsInt(a int) int {
@@ -36,20 +35,20 @@ func AbsInt64(a int) int {
 	return a
 }
 
-func Min(vs ...F) F {
-	m := F(math.MaxFloat64)
-	for _, v := range vs {
-		if v < m {
+func Min(vs ...Decimal) Decimal {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
 			m = v
 		}
 	}
 	return m
 }
 
-func Max(vs ...F) F {
-	m := -F(math.SmallestNonzeroFloat64)
-	for _, v := range vs {
-		if v > m {
+func Max(vs ...Decimal) Decimal {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
 			m = v
 		}
 	}
@@ -57,9 +56,9 @@ func Max(vs ...F) F {
 }
 
 func MinInt(vs ...int) int {
-	m := int(math.MaxInt64)
-	for _, v := range vs {
-		if v < m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
 			m = v
 		}
 	}
@@ -67,9 +66,9 @@ func MinInt(vs ...int) int {
 }
 
 func MinInt64(vs ...int64) int64 {
-	m := int64(math.MaxInt64)
-	for _, v := range vs {
-		if v < m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
 			m = v
 		}
 	}
@@ -77,9 +76,9 @@ func MinInt64(vs ...int64) int64 {
 }
 
 func MinUint(vs ...uint) uint {
-	m := uint(math.MaxUint64)
-	for _, v := range vs {
-		if v < m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
 			m = v
 		}
 	}
@@ -87,9 +86,9 @@ func MinUint(vs ...uint) uint {
 }
 
 func MinUint64(vs ...uint64) uint64 {
-	m := uint64(math.MaxUint64)
-	for _, v := range vs {
-		if v < m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v < m {
 			m = v
 		}
 	}
@@ -97,9 +96,9 @@ func MinUint64(vs ...uint64) uint64 {
 }
 
 func MaxInt(vs ...int) int {
-	m := int(math.MinInt64)
-	for _, v := range vs {
-		if v > m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
 			m = v
 		}
 	}
@@ -107,9 +106,9 @@ func MaxInt(vs ...int) int {
 }
 
 func MaxInt64(vs ...int64) int64 {
-	m := int64(math.MinInt64)
-	for _, v := range vs {
-		if v > m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
 			m = v
 		}
 	}
@@ -117,9 +116,9 @@ func MaxInt64(vs ...int64) int64 {
 }
 
 func MaxUint(vs ...uint) uint {
-	m := uint(0)
-	for _, v := range vs {
-		if v > m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
 			m = v
 		}
 	}
@@ -127,9 +126,9 @@ func MaxUint(vs ...uint) uint {
 }
 
 func MaxUint64(vs ...uint64) uint64 {
-	m := uint64(0)
-	for _, v := range vs {
-		if v > m {
+	m := vs[0]
+	for i := 1; i < len(vs); i++ {
+		if v := vs[i]; v > m {
 			m = v
 		}
 	}

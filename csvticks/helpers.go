@@ -1,7 +1,9 @@
 package csvticks
 
 import (
+	"compress/gzip"
 	"errors"
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
@@ -25,6 +27,10 @@ var (
 
 	defaultTimeFmt atomic.Value
 )
+
+func GzipDecoder(r io.Reader) (io.ReadCloser, error) {
+	return gzip.NewReader(r)
+}
 
 // SetDefaultTimeFormat sets the default time format for DateTime parsing,
 // and it returns the previous value.
@@ -122,7 +128,7 @@ func ConvertToTicks(v interface{}, nameMapping map[string]string) (out Ticks) {
 			if ev = reflect.Indirect(it.FieldByIndex(flds.Open)); !ev.IsValid() {
 				continue
 			}
-			t.Open = ta.F(ev.Float())
+			t.Open = ta.Decimal(ev.Float())
 			ok = true
 		}
 
@@ -130,7 +136,7 @@ func ConvertToTicks(v interface{}, nameMapping map[string]string) (out Ticks) {
 			if ev = reflect.Indirect(it.FieldByIndex(flds.High)); !ev.IsValid() {
 				continue
 			}
-			t.High = ta.F(ev.Float())
+			t.High = ta.Decimal(ev.Float())
 			ok = true
 		}
 
@@ -138,7 +144,7 @@ func ConvertToTicks(v interface{}, nameMapping map[string]string) (out Ticks) {
 			if ev = reflect.Indirect(it.FieldByIndex(flds.Low)); !ev.IsValid() {
 				continue
 			}
-			t.Low = ta.F(ev.Float())
+			t.Low = ta.Decimal(ev.Float())
 			ok = true
 		}
 
@@ -146,7 +152,7 @@ func ConvertToTicks(v interface{}, nameMapping map[string]string) (out Ticks) {
 			if ev = reflect.Indirect(it.FieldByIndex(flds.Close)); !ev.IsValid() {
 				continue
 			}
-			t.Close = ta.F(ev.Float())
+			t.Close = ta.Decimal(ev.Float())
 			ok = true
 		}
 

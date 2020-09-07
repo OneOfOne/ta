@@ -27,9 +27,8 @@ func SMA(period int) Live {
 
 type liveSMA struct {
 	data   *TA
-	sum    F
+	sum    Decimal
 	period int
-	idx    int
 	count  int
 }
 
@@ -37,18 +36,15 @@ func (l *liveSMA) Setup(d *TA) *TA {
 	return d.Map(l.Update, false).Slice(-l.period+1, 0)
 }
 
-func (l *liveSMA) Update(v F) F {
-	l.idx = (l.idx + 1) % l.period
-	// prev := l.data[l.idx]
-	prev := l.data.At(l.idx)
-	l.data.SetAt(l.idx, v)
+func (l *liveSMA) Update(v Decimal) Decimal {
+	prev := l.data.PushCapped(v)
 
 	if l.count < l.period {
 		l.count++
 	}
 
 	l.sum = l.sum - prev + v
-	return l.sum / F(l.count)
+	return l.sum / Decimal(l.count)
 }
 
 func (l *liveSMA) Len() int { return l.period }
@@ -71,10 +67,10 @@ func EMA(period int) Live {
 }
 
 // CustomEMA - returns an updatable EMA with the given k
-func CustomEMA(period int, k F) Live {
+func CustomEMA(period int, k Decimal) Live {
 	checkPeriod(period, 2)
 	if k == 0 {
-		k = F(2 / float64(period+1))
+		k = Decimal(2 / float64(period+1))
 	}
 	return &liveEMA{
 		k:      k,
@@ -83,8 +79,8 @@ func CustomEMA(period int, k F) Live {
 }
 
 type liveEMA struct {
-	k      F
-	prevMA F
+	k      Decimal
+	prevMA Decimal
 	period int
 	idx    int
 	set    bool
@@ -97,7 +93,7 @@ func (l *liveEMA) Setup(d *TA) *TA {
 	return d
 }
 
-func (l *liveEMA) Update(v F) F {
+func (l *liveEMA) Update(v Decimal) Decimal {
 	if l.set {
 		l.prevMA = v.Sub(l.prevMA).Mul(l.k).Add(l.prevMA)
 		return l.prevMA
@@ -106,7 +102,7 @@ func (l *liveEMA) Update(v F) F {
 	l.prevMA += v
 	if l.idx++; l.idx == l.period {
 		l.set = true
-		l.prevMA = l.prevMA / F(l.period)
+		l.prevMA = l.prevMA / Decimal(l.period)
 	}
 	return l.prevMA
 }
@@ -130,12 +126,12 @@ func (ta *TA) WMA(period int) (*TA, Live) {
 // WMA - Exponential Moving Average
 // An alias for CustomWMA(period, (period * (period + 1)) >> 1)
 func WMA(period int) Live {
-	w := F((period * (period + 1)) >> 1)
+	w := Decimal((period * (period + 1)) >> 1)
 	return CustomWMA(period, w)
 }
 
 // CustomWMA returns an updatable WMA with the given weight
-func CustomWMA(period int, weight F) Live {
+func CustomWMA(period int, weight Decimal) Live {
 	checkPeriod(period, 2)
 	return &liveWMA{
 		data:   NewSize(period, false),
@@ -146,9 +142,9 @@ func CustomWMA(period int, weight F) Live {
 
 type liveWMA struct {
 	data        *TA
-	weight      F
-	sum         F
-	weightedSum F
+	weight      Decimal
+	sum         Decimal
+	weightedSum Decimal
 	idx         int
 	period      int
 	set         bool
@@ -156,10 +152,10 @@ type liveWMA struct {
 
 func (l *liveWMA) Setup(d *TA) *TA {
 	l.set = true
-	var sum, wsum F
+	var sum, wsum Decimal
 	for i := 0; i < l.period-1; i++ {
 		v := d.At(i)
-		wsum += v * F(i+1)
+		wsum += v * Decimal(i+1)
 		sum += v
 		l.data.SetAt(i, v)
 	}
@@ -169,21 +165,21 @@ func (l *liveWMA) Setup(d *TA) *TA {
 	return d
 }
 
-func (l *liveWMA) Update(v F) F {
+func (l *liveWMA) Update(v Decimal) Decimal {
 	if !l.set {
 		l.data.SetAt(l.idx, v)
 		if l.idx < l.period-1 {
 			l.idx++
-			l.weightedSum += v * F(l.idx)
+			l.weightedSum += v * Decimal(l.idx)
 			l.sum += v
-			return l.weightedSum / (l.weight * F(l.idx))
+			return l.weightedSum / (l.weight * Decimal(l.idx))
 		}
 		l.idx = l.period - 2
 		l.set = true
 	}
 	l.idx = (l.idx + 1) % l.period
 	l.data.SetAt(l.idx, v)
-	l.weightedSum += v * F(l.period)
+	l.weightedSum += v * Decimal(l.period)
 	l.sum += v
 	rv := l.weightedSum / l.weight
 	l.weightedSum -= l.sum
@@ -224,7 +220,7 @@ type liveDEMA struct {
 
 func (l *liveDEMA) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
 
-func (l *liveDEMA) Update(v F) F {
+func (l *liveDEMA) Update(v Decimal) Decimal {
 	e1 := l.e1.Update(v)
 	if l.idx < l.period {
 		if l.idx++; l.idx == l.period {
@@ -270,7 +266,7 @@ type liveTEMA struct {
 
 func (l *liveTEMA) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
 
-func (l *liveTEMA) Update(v F) F {
+func (l *liveTEMA) Update(v Decimal) Decimal {
 	e1 := l.e1.Update(v)
 	if l.idx < l.period {
 		if l.idx++; l.idx == l.period {

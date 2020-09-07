@@ -12,15 +12,15 @@ func RSI(period int) Live {
 	checkPeriod(period, 2)
 	return &liveRSI{
 		period: period,
-		per:    1 / F(period),
+		per:    1 / Decimal(period),
 	}
 }
 
 type liveRSI struct {
-	prev       F
-	smoothUp   F
-	smoothDown F
-	per        F
+	prev       Decimal
+	smoothUp   Decimal
+	smoothDown Decimal
+	per        Decimal
 	period     int
 	idx        int
 }
@@ -29,7 +29,7 @@ func (l *liveRSI) Setup(d *TA) *TA {
 	return d.Map(l.Update, false).Slice(-l.period+1, 0)
 }
 
-func (l *liveRSI) Update(v F) F {
+func (l *liveRSI) Update(v Decimal) Decimal {
 	if l.idx == 0 {
 		l.idx++
 		l.prev = v
@@ -43,13 +43,13 @@ func (l *liveRSI) Update(v F) F {
 		}
 
 		if l.idx == l.period {
-			l.smoothUp /= F(l.period)
-			l.smoothDown /= F(l.period)
+			l.smoothUp /= Decimal(l.period)
+			l.smoothDown /= Decimal(l.period)
 		}
 
 		l.idx++
 	} else {
-		var up, down F
+		var up, down Decimal
 		if v > l.prev {
 			up = v - l.prev
 		}
@@ -73,7 +73,7 @@ func (l *liveRSI) Clone() Live {
 
 type LiveMACD interface {
 	Setup(*TA) (*TA, *TA, *TA)
-	Update(v F) (F, F, F)
+	Update(v Decimal) (Decimal, Decimal, Decimal)
 	Len() (int, int, int)
 	Clone() LiveMACD
 }
@@ -115,7 +115,7 @@ func MACDExt(fast, slow, signal Live) LiveMACD {
 type liveMACD struct {
 	slow, fast, signal Live
 
-	prev F
+	prev Decimal
 }
 
 func (l *liveMACD) Setup(d *TA) (macd, signal, hist *TA) {
@@ -135,7 +135,7 @@ func (l *liveMACD) Setup(d *TA) (macd, signal, hist *TA) {
 	return
 }
 
-func (l *liveMACD) Update(v F) (F, F, F) {
+func (l *liveMACD) Update(v Decimal) (Decimal, Decimal, Decimal) {
 	fast := l.fast.Update(v)
 	slow := l.slow.Update(v)
 	macd := fast - slow

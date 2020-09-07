@@ -21,11 +21,12 @@ func (i *Idx) val() int {
 	return -1
 }
 
-func FieldIndex(i int) *Idx {
+// CSVIndex helps define the index of the field in a csv file
+func CSVIndex(i int) *Idx {
 	return (*Idx)(&i)
 }
 
-// Mapping maps a csv field to a tick field
+// Mapping defines how to read a CSV file
 type Mapping struct {
 	SkipFirstRow bool
 	Decoder      func(r io.Reader) (io.Reader, error)
@@ -155,13 +156,13 @@ func LoadReader(r io.Reader, mapping Mapping) (tks Ticks, err error) {
 
 // Tick represents a single tick
 type Tick struct {
-	TS     DateTime `json:"date"`
-	Symbol string   `json:"symbol"`
-	Open   ta.F     `json:"open"`
-	High   ta.F     `json:"high"`
-	Low    ta.F     `json:"low"`
-	Close  ta.F     `json:"close"`
-	Volume int64    `json:"volume"`
+	TS     DateTime   `json:"date"`
+	Symbol string     `json:"symbol"`
+	Open   ta.Decimal `json:"open"`
+	High   ta.Decimal `json:"high"`
+	Low    ta.Decimal `json:"low"`
+	Close  ta.Decimal `json:"close"`
+	Volume int64      `json:"volume"`
 }
 
 type Ticks []*Tick
@@ -188,7 +189,7 @@ func (tks Ticks) BySymbol(symbol string) Ticks {
 func (tks Ticks) Open() *ta.TA {
 	out := ta.NewSize(len(tks), true)
 	for _, t := range tks {
-		out.Append(t.Open, false)
+		out.Append(t.Open)
 	}
 	return out
 }
@@ -197,7 +198,7 @@ func (tks Ticks) Open() *ta.TA {
 func (tks Ticks) High() *ta.TA {
 	out := ta.NewSize(len(tks), true)
 	for _, t := range tks {
-		out.Append(t.High, false)
+		out.Append(t.High)
 	}
 	return out
 }
@@ -206,7 +207,7 @@ func (tks Ticks) High() *ta.TA {
 func (tks Ticks) Low() *ta.TA {
 	out := ta.NewSize(len(tks), true)
 	for _, t := range tks {
-		out.Append(t.Low, false)
+		out.Append(t.Low)
 	}
 	return out
 }
@@ -215,7 +216,7 @@ func (tks Ticks) Low() *ta.TA {
 func (tks Ticks) Close() *ta.TA {
 	out := ta.NewSize(len(tks), true)
 	for _, t := range tks {
-		out.Append(t.Close, false)
+		out.Append(t.Close)
 	}
 	return out
 }

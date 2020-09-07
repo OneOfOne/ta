@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-func randSlice(size int, seed int64, min, max F) *TA {
+func randSlice(size int, seed int64, min, max Decimal) *TA {
 	r := rand.New(rand.NewSource(seed))
 	out := NewSize(size, true)
 	for i := 0; i < size; i++ {
 		v := RandInRange(r, min, max)
-		out.Append(v, false)
+		out.Append(v)
 	}
 
 	return out
@@ -24,7 +24,7 @@ func TestGroupBy(t *testing.T) {
 		115.68005825728478, 115.13575339798609, 115.5782899338858, 115.80296018224767, 115.88345372453232, 115.24272441950352, 115.13836671287244,
 		115.79672239067357, 115.44007649128464,
 	})
-	agg := s.GroupBy(func(idx int, _ F) bool { // convert minute chart to hour
+	agg := s.GroupBy(func(idx int, _ Decimal) bool { // convert minute chart to hour
 		return idx > 0 && idx%60 == 0
 	}, nil, false)
 

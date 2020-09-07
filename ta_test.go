@@ -62,7 +62,7 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 	pyres := NewSize(len(tmp), true)
 	for _, arg := range tmp {
 		if n, err := strconv.ParseFloat(arg, 64); err == nil {
-			pyres.Append(F(n), false)
+			pyres.Append(Decimal(n))
 		}
 	}
 
