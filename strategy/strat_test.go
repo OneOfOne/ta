@@ -40,7 +40,7 @@ func ExampleStrategy() {
 	res := strategy.Apply(strat, "AAPL", closes, 25000, 25)
 
 	fmt.Printf("bought: %v, sold: %v, assets (%v): $%.3f, balance left: $%.3f, total: $%.3f, gain/loss: $%.2f (%.2f%%)\n",
-		res.Bought, res.Sold, res.Shares, res.SharesValue, res.Balance, res.Total(), res.GainLoss(), res.GainLossPercent())
+		res.Bought, res.Sold, res.NumShares(), res.SharesValue(), res.Balance, res.Total(), res.PL(), res.PLPerc())
 
 	// Output:
 	// bought: 6825, sold: 6800, assets (25): $7793.750, balance left: $17553.718, total: $25347.468, gain/loss: $347.47 (1.37%)

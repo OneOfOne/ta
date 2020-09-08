@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"math"
+	"strconv"
 
 	"go.oneofone.dev/ta"
 	"go.oneofone.dev/ta/decimal"
@@ -20,27 +21,68 @@ type Result struct {
 	Symbol       string
 	StartBalance Decimal
 	Balance      Decimal
-	SharesValue  Decimal
+
+	Orders []*Order
 
 	Bought int
 	Sold   int
-	Shares int
 
 	LastPrice Decimal
 }
 
-func (r *Result) Total() Decimal    { return r.Balance + r.SharesValue }
-func (r *Result) GainLoss() Decimal { return r.Total() - r.StartBalance }
-func (r *Result) GainLossPercent() Decimal {
-	return ((r.GainLoss() / r.Total()) * 100).Floor(100)
+func (r *Result) Total() Decimal {
+	return r.Balance + r.SharesValue()
+}
+
+func (r *Result) NumShares() (n int) {
+	for _, o := range r.Orders {
+		n += o.Count
+	}
+	return
+}
+
+func (r *Result) SharesValue() (n Decimal) {
+	for _, o := range r.Orders {
+		n += (o.Price * Decimal(o.Count))
+	}
+	return
+}
+
+// PL - Profit / Loss
+func (r *Result) PL() Decimal { return r.Total() - r.StartBalance }
+
+// PLPerc - Profit/Loss percent
+func (r *Result) PLPerc() Decimal {
+	return ((r.PL() / r.Total()) * 100).Floor(100)
+}
+
+type Order struct {
+	ID     string
+	Symbol string
+	Price  Decimal
+	Count  int
+	Profit Decimal
+	Loss   Decimal
+}
+
+func (o *Order) price() (min, max Decimal) {
+	p := o.Price
+	if min = o.Profit; min != 0 {
+		min = p - (p * min)
+	}
+
+	if max = o.Loss; max != 0 {
+		max = p + (p * max)
+	}
+	return
 }
 
 type (
-	TxFunc func(r *Result) (numShares int, cost Decimal)
+	TxFunc func(r *Result) (orders []*Order)
 
 	Options struct {
 		Balance         Decimal
-		Shares          int
+		Orders          []*Order
 		MaxSharesToHold int
 
 		AllowShort bool
@@ -62,20 +104,14 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan De
 
 	done := ctx.Done()
 	go func() {
-		var (
-			r = &Result{
-				Symbol:       symbol,
-				StartBalance: opts.Balance,
-				Balance:      opts.Balance,
-				Shares:       opts.Shares,
-			}
-			num          int
-			costPerShare Decimal
-			tc           Decimal
-		)
+		r := &Result{
+			Symbol:       symbol,
+			StartBalance: opts.Balance,
+			Balance:      opts.Balance,
+			Orders:       append([]*Order(nil), opts.Orders...),
+		}
 
 		defer func() {
-			r.SharesValue = Decimal(r.Shares) * r.LastPrice
 			res <- r
 			close(res)
 		}()
@@ -89,34 +125,43 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan De
 			r.LastPrice = v
 			str.Update(v)
 
-			shouldSell := str.ShouldSell() && (r.Shares > 0 || opts.AllowShort)
-			shouldBuy := str.ShouldBuy() && r.Balance > v && r.Shares < opts.MaxSharesToHold
+			shouldBuy := str.ShouldBuy() && r.Balance > v && r.NumShares() < opts.MaxSharesToHold
+			shouldSell := str.ShouldSell() && (len(r.Orders) > 0 || opts.AllowShort)
+
+			if shouldBuy && shouldSell {
+				shouldBuy = false
+			}
 
 			switch {
 			case shouldBuy:
-				if r.Balance < v || r.Shares >= opts.MaxSharesToHold {
-					break
+				bought := opts.Buy(r)
+				if len(bought) == 0 {
+					goto L
 				}
-				if num, costPerShare = opts.Buy(r); num == 0 {
-					break
+				for _, o := range bought {
+					r.Bought += o.Count
+					r.Balance -= (o.Price * Decimal(o.Count))
 				}
-				tc = Decimal(num) * costPerShare
-				r.Shares += num
-				r.Bought += num
-				r.Balance -= tc
-				r.SharesValue = Decimal(r.Shares) * v
+				r.Orders = append(r.Orders, bought...)
+
 			case shouldSell:
-				if r.Shares == 0 && !opts.AllowShort {
-					break
+				sold := opts.Sell(r)
+				if len(sold) == 0 {
+					goto L
 				}
-				if num, costPerShare = opts.Sell(r); num == 0 {
-					break
+				var out []*Order
+			O:
+				for _, o := range r.Orders {
+					for _, oo := range sold {
+						if oo.ID == o.ID {
+							r.Sold += oo.Count
+							r.Balance += (oo.Price * Decimal(oo.Count))
+							continue O
+						}
+					}
+					out = append(out, o)
 				}
-				tc = Decimal(num) * costPerShare
-				r.Shares -= num
-				r.Sold += num
-				r.Balance += tc
-				r.SharesValue = Decimal(r.Shares) * v
+				r.Orders = out
 			default:
 
 			}
@@ -137,21 +182,33 @@ func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxSh
 		close(in)
 	}()
 
+	id := 0
+
 	return <-ApplyLive(context.Background(), str, symbol, in, Options{
 		Balance:         Decimal(startBalance),
 		MaxSharesToHold: maxShares,
 
-		Buy: func(r *Result) (numShares int, costPerShare Decimal) {
-			costPerShare = r.LastPrice
-			if numShares = ta.MinInt(int(r.Balance/costPerShare), maxShares-r.Shares); numShares == 0 {
+		Buy: func(r *Result) (out []*Order) {
+			id++
+			numShares := ta.MinInt(int(r.Balance/r.LastPrice), maxShares-r.NumShares())
+			if numShares == 0 {
 				return
 			}
-			return
+			return []*Order{
+				{ID: strconv.Itoa(id), Count: numShares, Price: r.LastPrice},
+			}
 		},
-		Sell: func(r *Result) (numShares int, costPerShare Decimal) {
-			costPerShare = r.LastPrice
-			if numShares = r.Shares; numShares < 0 {
+		Sell: func(r *Result) (out []*Order) {
+			numShares := r.NumShares()
+			if numShares < 0 {
 				return
+			}
+
+			for _, o := range r.Orders {
+				if numShares -= o.Count; numShares >= 0 {
+					o.Price = r.LastPrice
+					out = append(out, o)
+				}
 			}
 			return
 		},
