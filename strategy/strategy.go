@@ -5,38 +5,41 @@ import (
 	"math"
 
 	"go.oneofone.dev/ta"
+	"go.oneofone.dev/ta/decimal"
 )
 
+type Decimal = decimal.Decimal
+
 type Strategy interface {
-	Update(v ta.Decimal)
+	Update(v Decimal)
 	ShouldBuy() bool
 	ShouldSell() bool
 }
 
 type Result struct {
 	Symbol       string
-	StartBalance ta.Decimal
-	Balance      ta.Decimal
-	SharesValue  ta.Decimal
+	StartBalance Decimal
+	Balance      Decimal
+	SharesValue  Decimal
 
 	Bought int
 	Sold   int
 	Shares int
 
-	LastPrice ta.Decimal
+	LastPrice Decimal
 }
 
-func (r *Result) Total() ta.Decimal    { return r.Balance + r.SharesValue }
-func (r *Result) GainLoss() ta.Decimal { return r.Total() - r.StartBalance }
-func (r *Result) GainLossPercent() ta.Decimal {
+func (r *Result) Total() Decimal    { return r.Balance + r.SharesValue }
+func (r *Result) GainLoss() Decimal { return r.Total() - r.StartBalance }
+func (r *Result) GainLossPercent() Decimal {
 	return ((r.GainLoss() / r.Total()) * 100).Floor(100)
 }
 
 type (
-	TxFunc func(r *Result) (numShares int, cost ta.Decimal)
+	TxFunc func(r *Result) (numShares int, cost Decimal)
 
 	Options struct {
-		Balance         ta.Decimal
+		Balance         Decimal
 		Shares          int
 		MaxSharesToHold int
 
@@ -47,7 +50,7 @@ type (
 	}
 )
 
-func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan ta.Decimal, opts Options) <-chan *Result {
+func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan Decimal, opts Options) <-chan *Result {
 	res := make(chan *Result, 1)
 	if opts.Balance < 1 {
 		panic("balance < 1")
@@ -67,12 +70,12 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan ta
 				Shares:       opts.Shares,
 			}
 			num          int
-			costPerShare ta.Decimal
-			tc           ta.Decimal
+			costPerShare Decimal
+			tc           Decimal
 		)
 
 		defer func() {
-			r.SharesValue = ta.Decimal(r.Shares) * r.LastPrice
+			r.SharesValue = Decimal(r.Shares) * r.LastPrice
 			res <- r
 			close(res)
 		}()
@@ -97,11 +100,11 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan ta
 				if num, costPerShare = opts.Buy(r); num == 0 {
 					break
 				}
-				tc = ta.Decimal(num) * costPerShare
+				tc = Decimal(num) * costPerShare
 				r.Shares += num
 				r.Bought += num
 				r.Balance -= tc
-				r.SharesValue = ta.Decimal(r.Shares) * v
+				r.SharesValue = Decimal(r.Shares) * v
 			case shouldSell:
 				if r.Shares == 0 && !opts.AllowShort {
 					break
@@ -109,11 +112,11 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan ta
 				if num, costPerShare = opts.Sell(r); num == 0 {
 					break
 				}
-				tc = ta.Decimal(num) * costPerShare
+				tc = Decimal(num) * costPerShare
 				r.Shares -= num
 				r.Sold += num
 				r.Balance += tc
-				r.SharesValue = ta.Decimal(r.Shares) * v
+				r.SharesValue = Decimal(r.Shares) * v
 			default:
 
 			}
@@ -126,7 +129,7 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan ta
 }
 
 func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxShares int) *Result {
-	in := make(chan ta.Decimal, 10)
+	in := make(chan Decimal, 10)
 	go func() {
 		for i := 0; i < data.Len(); i++ {
 			in <- data.At(i)
@@ -135,17 +138,17 @@ func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxSh
 	}()
 
 	return <-ApplyLive(context.Background(), str, symbol, in, Options{
-		Balance:         ta.Decimal(startBalance),
+		Balance:         Decimal(startBalance),
 		MaxSharesToHold: maxShares,
 
-		Buy: func(r *Result) (numShares int, costPerShare ta.Decimal) {
+		Buy: func(r *Result) (numShares int, costPerShare Decimal) {
 			costPerShare = r.LastPrice
 			if numShares = ta.MinInt(int(r.Balance/costPerShare), maxShares-r.Shares); numShares == 0 {
 				return
 			}
 			return
 		},
-		Sell: func(r *Result) (numShares int, costPerShare ta.Decimal) {
+		Sell: func(r *Result) (numShares int, costPerShare Decimal) {
 			costPerShare = r.LastPrice
 			if numShares = r.Shares; numShares < 0 {
 				return
@@ -167,7 +170,7 @@ type merge struct {
 	all    bool
 }
 
-func (m *merge) Update(v ta.Decimal) {
+func (m *merge) Update(v Decimal) {
 	for _, s := range m.strats {
 		s.Update(v)
 	}
@@ -207,7 +210,7 @@ type mixed struct {
 	buy, sell Strategy
 }
 
-func (m *mixed) Update(v ta.Decimal) {
+func (m *mixed) Update(v Decimal) {
 	m.buy.Update(v)
 	m.sell.Update(v)
 }

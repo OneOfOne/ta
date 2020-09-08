@@ -1,6 +1,9 @@
 package ta
 
 import (
+	"fmt"
+	"io"
+	"strings"
 	"unsafe"
 
 	"go.oneofone.dev/ta/decimal"
@@ -42,6 +45,9 @@ type TA struct {
 }
 
 func (ta *TA) index(i int) int {
+	if i < 0 {
+		i = len(ta.v) + i
+	}
 	if ta.idx == nil {
 		return i
 	}
@@ -69,11 +75,12 @@ func (ta *TA) PushCapped(v Decimal) (prev Decimal) {
 
 	i := 0
 	if ta.idx != nil {
-		i = (*ta.idx + 1) % len(ta.v)
+		i = *ta.idx % len(ta.v)
 	}
-	ta.idx = &i
 	prev = ta.v[i]
 	ta.v[i] = v
+	i++
+	ta.idx = &i
 	return
 }
 
@@ -148,7 +155,12 @@ func (ta *TA) Last() Decimal {
 	return 0
 }
 
-func (ta *TA) Len() int { return len(ta.v) }
+func (ta *TA) Len() int {
+	if ta == nil {
+		return 0
+	}
+	return len(ta.v)
+}
 
 // Floats returns the taice as []float64, without a copy
 func (ta *TA) Floats() []float64 {
@@ -156,9 +168,9 @@ func (ta *TA) Floats() []float64 {
 	return *(*[]float64)(unsafe.Pointer(&ta.v))
 }
 
-// Data returns the underlying data slice
+// Raw returns the underlying data slice
 // if ta is capped, the data wil *not* be in order
-func (ta *TA) Data() []Decimal {
+func (ta *TA) Raw() []Decimal {
 	return ta.v
 }
 
@@ -222,11 +234,31 @@ func (ta *TA) Min() (idx int, v Decimal) {
 	return idx, ta.v[idx]
 }
 
+func (ta *TA) Crossover(o *TA) bool {
+	checkPeriod(ta.Len(), 3)
+	if o.Len() < 3 {
+		panic("o.Len() < 3")
+	}
+
+	return ta.At(-2) <= o.At(-2) && ta.At(-1) > o.At(-1)
+}
+
+func (ta *TA) Crossunder(o *TA) bool {
+	checkPeriod(ta.Len(), 3)
+	if o.Len() < 3 {
+		panic("o.Len() < 3")
+	}
+
+	return ta.At(-1) <= o.At(-1) && ta.At(-2) > o.At(-2)
+}
+
 func (ta *TA) Fill(start, length int, v Decimal) *TA {
 	if length < 1 {
 		length = ta.Len() + length
 	} else {
-		length = start + length
+		if length = start + length; length > ta.Len() {
+			length = ta.Len()
+		}
 	}
 
 	for i := start; i < length; i++ {
@@ -279,6 +311,7 @@ func (ta *TA) SplitFn(fn func(idx int, v Decimal) (split bool), copy bool) []*TA
 		last int
 		vs   = ta.v
 	)
+
 	for i := 0; i < ln; i++ {
 		v := vs[i]
 		if fn(i, v) {
@@ -289,42 +322,22 @@ func (ta *TA) SplitFn(fn func(idx int, v Decimal) (split bool), copy bool) []*TA
 			out = append(out, &TA{v: tmp})
 		}
 	}
+
 	if last < ln {
 		if tmp = vs[last:]; copy {
 			tmp = append([]Decimal(nil), tmp...)
 		}
 		out = append(out, &TA{v: tmp})
 	}
+
 	return out[:len(out):len(out)]
 }
 
 func (ta *TA) Split(segSize int, copy bool) []*TA {
-	if segSize < 1 {
-		return nil
-	}
-	ln := len(ta.v)
-	if segSize >= ln {
-		return []*TA{ta}
-	}
-
-	n := ln / segSize
-	if ln%segSize != 0 {
-		n++
-	}
-	out := make([]*TA, 0, n)
-
-	for i, j := 0, segSize; i < ln; i, j = j, j+segSize {
-		if j > ln {
-			j = ln
-		}
-		tmp := ta.v[i:j]
-		if copy {
-			tmp = append([]Decimal(nil), tmp...)
-		}
-		out = append(out, &TA{v: tmp})
-	}
-
-	return out
+	n := segSize - 1
+	return ta.SplitFn(func(idx int, _ Decimal) bool {
+		return idx%segSize == n
+	}, copy)
 }
 
 func (ta *TA) Sum() Decimal {
@@ -334,4 +347,49 @@ func (ta *TA) Sum() Decimal {
 
 func (ta *TA) Avg() Decimal {
 	return ta.Sum().Div(Decimal(float64(len(ta.v))))
+}
+
+func (ta *TA) Format(f fmt.State, c rune) {
+	prec, ok := f.Precision()
+	if !ok {
+		prec = 20
+	}
+
+	if c == 'v' {
+		c = 'g'
+	}
+
+	hasPlus := f.Flag('+')
+	hasZero := f.Flag('0')
+	hasSpace := f.Flag(' ')
+	wid, ok := f.Width()
+	if !ok {
+		wid = 0
+	}
+
+	if hasPlus {
+		io.WriteString(f, "&TA{")
+	} else {
+		io.WriteString(f, "[")
+	}
+
+	for i := 0; i < ta.Len(); i++ {
+		if i > 0 {
+			io.WriteString(f, ", ")
+		}
+		v := ta.At(i).Text(byte(c), prec)
+		if w := wid - len(v); w > 0 {
+			if hasZero {
+				io.WriteString(f, strings.Repeat("0", w))
+			} else if hasSpace {
+				io.WriteString(f, strings.Repeat(" ", w))
+			}
+		}
+		io.WriteString(f, v)
+	}
+	if hasPlus {
+		io.WriteString(f, "}")
+	} else {
+		io.WriteString(f, "]")
+	}
 }

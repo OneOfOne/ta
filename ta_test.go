@@ -170,7 +170,6 @@ func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ strin
 var maSteps = &[...]int{2, 3, 5, 10, 20, 32, 36, 39, 52, 71, 90, 120, 132, 180}
 
 func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
-	t.Helper()
 	t.Parallel()
 	for _, period := range maSteps {
 		if maxPeriod > -1 && period > maxPeriod {

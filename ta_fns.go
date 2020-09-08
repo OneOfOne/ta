@@ -2,15 +2,17 @@ package ta
 
 import "math"
 
-func AvgOf(tas ...*TA) *TA {
-	if len(tas) == 0 {
-		return nil
-	}
+// HLC3 - alias for Average(high, low, close)
+func HLC3(high, low, close *TA) *TA {
+	return Average(high, low, close)
+}
 
+// Average - returns the average of the passed in ta's
+func Average(tas ...*TA) *TA {
 	ln := tas[0].Len()
 	for i := 1; i < len(tas); i++ {
-		if tas[i].Len() != ln {
-			panic("all input TAs must have equal size")
+		if n := tas[i].Len(); n > ln {
+			ln = n
 		}
 	}
 
@@ -18,7 +20,9 @@ func AvgOf(tas ...*TA) *TA {
 	for i := 0; i < ln; i++ {
 		var v Decimal
 		for _, ta := range tas {
-			v = v.Add(ta.At(i))
+			if i < ta.Len() {
+				v = v.Add(ta.At(i))
+			}
 		}
 		out.Append(v / Decimal(ln))
 	}

@@ -288,3 +288,11 @@ again:
 	}
 	return min + Decimal(f)*(max-min)
 }
+
+func Crosover(curr, prev, mark Decimal) bool {
+	return prev <= mark && curr > mark
+}
+
+func Crossunder(curr, prev, mark Decimal) bool {
+	return curr <= mark && prev > mark
+}

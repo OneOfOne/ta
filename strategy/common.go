@@ -1,34 +1,37 @@
 package strategy
 
-import "go.oneofone.dev/ta"
+import (
+	"go.oneofone.dev/ta"
+	"go.oneofone.dev/ta/decimal"
+)
 
 func RSI(period, oversold, overbought int) Strategy {
 	return &rsi{
 		rsi:        ta.RSI(period),
-		oversold:   ta.Decimal(oversold),
-		overbought: ta.Decimal(overbought),
+		oversold:   Decimal(oversold),
+		overbought: Decimal(overbought),
 		idx:        period,
 	}
 }
 
 type rsi struct {
 	rsi        ta.Study
-	oversold   ta.Decimal
-	overbought ta.Decimal
-	last       ta.Decimal
+	oversold   Decimal
+	overbought Decimal
+	last       Decimal
 	idx        int
 	dir        int8
 }
 
-func (r *rsi) Update(v ta.Decimal) {
+func (r *rsi) Update(v Decimal) {
 	v = r.rsi.Update(v)
 	switch {
-	case r.idx > -1:
+	case r.idx > 0:
 		r.idx--
-	case v >= r.overbought && r.last < r.overbought:
-		r.dir = -1
-	case v >= r.oversold && r.last < r.oversold:
+	case decimal.Crosover(v, r.last, r.overbought):
 		r.dir = 1
+	case decimal.Crossunder(v, r.last, r.oversold):
+		r.dir = -1
 	default:
 		r.dir = 0
 	}
@@ -59,20 +62,20 @@ func MACDExt(fast, slow, signal ta.Study) Strategy {
 
 type macd struct {
 	macd ta.MACDStudy
-	last ta.Decimal
+	last Decimal
 	idx  int
 	dir  int8
 }
 
-func (r *macd) Update(v ta.Decimal) {
+func (r *macd) Update(v Decimal) {
 	_, _, v = r.macd.Update(v)
 
 	switch {
-	case r.idx > -1:
+	case r.idx > 0:
 		r.idx--
-	case v < 0 && r.last > 0:
+	case decimal.Crossunder(v, r.last, 0):
 		r.dir = -1
-	case v > 0 && r.last < 0:
+	case decimal.Crosover(v, r.last, 0):
 		r.dir = 1
 	default:
 		r.dir = 0
