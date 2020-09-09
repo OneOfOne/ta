@@ -51,12 +51,13 @@ func TestTA(t *testing.T) {
 	}
 
 	parts := ta.Slice(0, 11).Split(3, false)
+	t.Log(ta.Slice(0, 11).Len())
 	if len(parts) != 4 {
 		t.Fatalf("expected 4 parts, got %v %v", len(parts), parts)
 	}
 
 	if parts[0].Len() != 3 || parts[1].Len() != 3 || parts[2].Len() != 3 || parts[3].Len() != 2 {
-		t.Fatalf("expected 3x3, 1x2 parts, got %v", parts)
+		t.Fatalf("expected 3x3, 1x2 parts, got %v %v", len(parts), parts)
 	}
 }
 
@@ -89,10 +90,10 @@ func TestCapped(t *testing.T) {
 			continue
 		}
 		for j := 0; j < s.Len(); j++ {
-			t.Log(i, j)
-			exp := i - ((i / s.Len()) + j)
+			x := (s.Len() - j) - 2
+			exp := i - x
 			if v := int(s.Get(j)); v != exp {
-				t.Fatal(i, j, v, i/5, exp, s.v)
+				t.Fatal(i, j, x, v, i/5, exp, s.v)
 			}
 		}
 		// m1 := int(s.At((4 - 1)))
@@ -104,7 +105,7 @@ func TestCapped(t *testing.T) {
 		// }
 	}
 	if !s.Equal(exp) {
-		t.Fatal("s != exp", s, s.v, exp)
+		t.Fatal("s != exp", s, s.v, exp, exp.v)
 	}
 
 	exp = New([]float64{2, 4, 6, 8, 10})
@@ -122,7 +123,7 @@ func TestCapped(t *testing.T) {
 		ta.Push(Decimal(i + 1))
 	}
 	t.Log(ta.v)
-	if v := ta.Raw(); !decimal.SliceEqual(v, []Decimal{10, 8, 9}) {
+	if v := ta.Raw(); !decimal.SliceEqual(v, []Decimal{9, 10, 8}) {
 		t.Fatalf("wrong slice value x1: %+v", v)
 	}
 

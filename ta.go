@@ -58,7 +58,7 @@ func (ta *TA) index(i int) int {
 	if ta.idx == nil || len(ta.v) < cap(ta.v) {
 		return i
 	}
-	idx := (*ta.idx + i) % len(ta.v)
+	idx := (*ta.idx + i + 1) % len(ta.v)
 	if idx < 0 {
 		idx += len(ta.v)
 	}
@@ -66,7 +66,7 @@ func (ta *TA) index(i int) int {
 }
 
 func (ta *TA) Get(i int) Decimal {
-	if i = ta.index(i + 1); i >= len(ta.v) || i < 0 {
+	if i = ta.index(i); i >= len(ta.v) || i < 0 {
 		return 0
 	}
 	return ta.v[i]
@@ -99,19 +99,21 @@ func (ta *TA) Push(v Decimal) (prev Decimal) {
 // Append appends v to the underlying buffer,
 // if `Capped` was called it i'll act as a ring buffer rather than a slice
 func (ta *TA) Append(vs ...Decimal) *TA {
-	// log.Println(ta.idx, len(ta.v)+len(vs), len(ta.v)+len(vs) <= cap(ta.v))
 	if ta.idx == nil || len(ta.v)+len(vs) <= cap(ta.v) {
 		ta.v = append(ta.v, vs...)
+		if ta.idx != nil {
+			*ta.idx = len(ta.v) - 1
+		}
 		return ta
 	}
 
-	i := *ta.idx
+	i := (*ta.idx + 1) % len(ta.v)
 	for _, v := range vs {
-		ta.v[i%len(ta.v)] = v
-		i++
+		ta.v[i] = v
+		i = (i + 1) % len(ta.v)
 	}
 
-	ta.idx = &i
+	*ta.idx = i
 	return ta
 }
 
@@ -157,8 +159,8 @@ func (ta *TA) Slice(i, j int) *TA {
 	}
 	if j == 0 {
 		j = ln
-	} else {
-		j = MinInt(ln, AbsInt(i+j))
+	} else if j < 0 {
+		j = MinInt(ln, i-j)
 	}
 
 	if ta.idx == nil {
@@ -166,9 +168,6 @@ func (ta *TA) Slice(i, j int) *TA {
 	}
 
 	out := make([]Decimal, 0, j-i)
-	idx := int(*ta.idx)
-	i += idx
-	j += idx
 	for ; i < j; i++ {
 		out = append(out, ta.Get(i))
 	}
@@ -203,7 +202,7 @@ func (ta *TA) Raw() []Decimal {
 }
 
 func (ta *TA) Copy() *TA {
-	return &TA{v: append([]Decimal(nil), ta.v...)}
+	return &TA{v: append([]Decimal(nil), ta.v...), idx: ta.idx}
 }
 
 func (ta *TA) Equal(o *TA) bool {
@@ -327,27 +326,27 @@ func (ta *TA) SplitFn(fn func(idx int, v Decimal) (split bool), copy bool) []*TA
 	var (
 		ln   = len(ta.v)
 		out  []*TA
-		tmp  []Decimal
 		last int
-		vs   = ta.v
 	)
 
 	for i := 0; i < ln; i++ {
-		v := vs[i]
+		v := ta.Get(i)
 		if fn(i, v) {
-			if tmp = vs[last : i+1]; copy {
-				tmp = append([]Decimal(nil), tmp...)
+			tmp := ta.Slice(last, i+1)
+			if copy && ta.idx == nil {
+				tmp = tmp.Copy()
 			}
 			last = i + 1
-			out = append(out, &TA{v: tmp})
+			out = append(out, tmp)
 		}
 	}
 
 	if last < ln {
-		if tmp = vs[last:]; copy {
-			tmp = append([]Decimal(nil), tmp...)
+		tmp := ta.Slice(last, 0)
+		if copy && ta.idx == nil {
+			tmp = tmp.Copy()
 		}
-		out = append(out, &TA{v: tmp})
+		out = append(out, tmp)
 	}
 
 	return out[:len(out):len(out)]
