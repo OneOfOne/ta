@@ -1,17 +1,20 @@
 package ta
 
-import "math"
+import (
+	"math"
+)
 
 type Study interface {
 	Setup(d *TA) *TA
 	Update(v Decimal) Decimal
 	Len() int
-	Clone() Study
 }
 
 // RSI - Relative Strength Index
 func (ta *TA) RSI(period int) (*TA, Study) {
-	return ta.MovingAverage(RSI, period)
+	s := RSI(period)
+	ta = s.Setup(ta)
+	return ta, s
 }
 
 // RSI - Relative Strength Index
@@ -24,7 +27,7 @@ func RSI(period int) Study {
 }
 
 // RSIExt - Relative Strength Index using a different moving average func
-func RSIExt(ma Study) Study {
+func RSIExt(ma MovingAverage) Study {
 	period := ma.Len()
 	checkPeriod(period, 2)
 	return &liveRSI{
@@ -35,7 +38,7 @@ func RSIExt(ma Study) Study {
 }
 
 type liveRSI struct {
-	ext        Study
+	ext        MovingAverage
 	prev       Decimal
 	smoothUp   Decimal
 	smoothDown Decimal
@@ -88,41 +91,49 @@ func (l *liveRSI) Update(v Decimal) Decimal {
 
 func (l *liveRSI) Len() int { return l.period }
 
-func (l *liveRSI) Clone() Study {
-	cp := *l
-	return &cp
-}
-
-type MACDStudy interface {
-	Setup(*TA) (*TA, *TA, *TA)
-	Update(v Decimal) (Decimal, Decimal, Decimal)
-	Len() (int, int, int)
-	Clone() MACDStudy
+// StudyMulti represents a study that accepts multiple values and returns multiple values, for example, MACD
+type StudyMulti interface {
+	Setup(...*TA) []*TA
+	Update(v ...Decimal) []Decimal
+	Len() []int
 }
 
 // MACD - Moving Average Convergence/Divergence, using EMA
-func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, ma MACDStudy) {
-	ma = MACD(fastPeriod, slowPeriod, signalPeriod)
-	macd, signal, hist = ma.Setup(ta)
-	return
-	// return sl.MovingAverage(MACD, period)
+func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, _ StudyMulti) {
+	ma := MACD(fastPeriod, slowPeriod, signalPeriod)
+	out := ma.Setup(ta)
+	return out[0], out[1], out[2], ma
 }
 
-// MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func (ta *TA) MACDExt(fastMA, slowMA, signalMA Study) (macd, signal, hist *TA, ma MACDStudy) {
-	ma = MACDExt(fastMA, slowMA, signalMA)
-	macd, signal, hist = ma.Setup(ta)
-	return
-	// return sl.MovingAverage(MACD, period)
+// MACDExt - Moving Average Convergence/Divergence, using a custom MA for all periods
+func (ta *TA) MACDExt(fastPeriod, slowPeriod, signalPeriod int, maf MovingAverageFunc) (macd, signal, hist *TA, _ StudyMulti) {
+	ma := MACDExt(fastPeriod, slowPeriod, signalPeriod, maf)
+	out := ma.Setup(ta)
+	return out[0], out[1], out[2], ma
 }
 
-// MACD - Moving Average Convergence/Divergence, usign EMA
-func MACD(fastPeriod, slowPeriod, signalPeriod int) MACDStudy {
-	return MACDExt(EMA(fastPeriod), EMA(slowPeriod), EMA(signalPeriod))
+// MACDMulti - Moving Average Convergence/Divergence using a custom MA functions for each period
+func (ta *TA) MACDMulti(fastMA, slowMA, signalMA MovingAverage) (macd, signal, hist *TA, _ StudyMulti) {
+	ma := MACDMulti(fastMA, slowMA, signalMA)
+	out := ma.Setup(ta)
+	return out[0], out[1], out[2], ma
 }
 
-// MACDExt - Moving Average Convergence/Divergence using custom MA functions
-func MACDExt(fast, slow, signal Study) MACDStudy {
+// MACD - Moving Average Convergence/Divergence, using EMA for all periods
+func MACD(fastPeriod, slowPeriod, signalPeriod int) StudyMulti {
+	return MACDExt(fastPeriod, slowPeriod, signalPeriod, EMA)
+}
+
+// MACDExt - Moving Average Convergence/Divergence, using a custom MA for all periods
+func MACDExt(fastPeriod, slowPeriod, signalPeriod int, ma MovingAverageFunc) StudyMulti {
+	if ma == nil {
+		panic("ma == nil")
+	}
+	return MACDMulti(ma(fastPeriod), ma(slowPeriod), ma(signalPeriod))
+}
+
+// MACDMulti - Moving Average Convergence/Divergence using a custom MA functions for each period
+func MACDMulti(fast, slow, signal MovingAverage) StudyMulti {
 	if slow.Len() < fast.Len() {
 		slow, fast = fast, slow
 	}
@@ -135,40 +146,42 @@ func MACDExt(fast, slow, signal Study) MACDStudy {
 }
 
 type liveMACD struct {
-	slow, fast, signal Study
+	slow, fast, signal MovingAverage
 
 	prev Decimal
 }
 
-func (l *liveMACD) Setup(d *TA) (macd, signal, hist *TA) {
-	macd = NewSize(d.Len(), false)
-	signal = NewSize(d.Len(), false)
-	hist = NewSize(d.Len(), false)
-	for i := 0; i < d.Len(); i++ {
-		v := d.At(i)
-		a, b, c := l.Update(v)
-		macd.SetAt(i, a)
-		signal.SetAt(i, b)
-		hist.SetAt(i, c)
+func (l *liveMACD) Setup(ds ...*TA) []*TA {
+	d0ln := ds[0].Len()
+	macd := NewSize(d0ln, false)
+	signal := NewSize(d0ln, false)
+	hist := NewSize(d0ln, false)
+	for _, d := range ds {
+		for i := 0; i < d.Len(); i++ {
+			v := d.Get(i)
+			vs := l.Update(v)
+			macd.Set(i, vs[0])
+			signal.Set(i, vs[1])
+			hist.Set(i, vs[2])
+		}
 	}
 	macd = macd.Slice(-l.signal.Len(), 0)
 	signal = signal.Slice(-l.signal.Len(), 0)
 	hist = hist.Slice(-l.signal.Len(), 0)
-	return
+	return []*TA{macd, signal, hist}
 }
 
-func (l *liveMACD) Update(v Decimal) (Decimal, Decimal, Decimal) {
-	fast := l.fast.Update(v)
-	slow := l.slow.Update(v)
-	macd := fast - slow
-	sig := l.signal.Update(macd)
-	return macd, sig, macd - sig
+func (l *liveMACD) Update(vs ...Decimal) []Decimal {
+	var fast, slow, macd, sig Decimal
+	for _, v := range vs {
+		fast = l.fast.Update(v)
+		slow = l.slow.Update(v)
+		macd = fast - slow
+		sig = l.signal.Update(macd)
+	}
+	return []Decimal{macd, sig, macd - sig}
 }
 
-func (l *liveMACD) Len() (int, int, int) {
-	return l.slow.Len(), l.fast.Len(), l.signal.Len()
-}
-
-func (l *liveMACD) Clone() MACDStudy {
-	panic("x")
+func (l *liveMACD) Len() []int {
+	return []int{l.slow.Len(), l.fast.Len(), l.signal.Len()}
 }

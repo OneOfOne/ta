@@ -53,22 +53,50 @@ func MACD(fastPeriod, slowPeriod, signalPeriod int) Strategy {
 	}
 }
 
-func MACDExt(fast, slow, signal ta.Study) Strategy {
+func MACDWithResistance(resistance, fastPeriod, slowPeriod, signalPeriod int) Strategy {
+	if resistance < 0 {
+		resistance = 0
+	}
 	return &macd{
-		macd: ta.MACDExt(fast, slow, signal),
+		macd: ta.MACD(fastPeriod, slowPeriod, signalPeriod),
+		idx:  (fastPeriod + slowPeriod + signalPeriod) / 3,
+		res:  resistance,
+	}
+}
+
+func MACDExt(resistance, fastPeriod, slowPeriod, signalPeriod int, fn ta.MovingAverageFunc) Strategy {
+	if resistance < 0 {
+		resistance = 0
+	}
+	return &macd{
+		macd: ta.MACDExt(fastPeriod, slowPeriod, signalPeriod, fn),
+		idx:  (fastPeriod + slowPeriod + signalPeriod) / 3,
+		res:  resistance,
+	}
+}
+
+func MACDMulti(resistance int, fast, slow, signal ta.MovingAverage) Strategy {
+	if resistance < 0 {
+		resistance = 0
+	}
+	return &macd{
+		macd: ta.MACDMulti(fast, slow, signal),
 		idx:  fast.Len() + slow.Len() + signal.Len()/3,
+		res:  resistance,
 	}
 }
 
 type macd struct {
-	macd ta.MACDStudy
+	macd ta.StudyMulti
 	last Decimal
+	res  int
 	idx  int
-	dir  int8
+	dir  int
 }
 
 func (r *macd) Update(v Decimal) {
-	_, _, v = r.macd.Update(v)
+	out := r.macd.Update(v)
+	v = out[2]
 
 	switch {
 	case r.idx > 0:
@@ -77,6 +105,10 @@ func (r *macd) Update(v Decimal) {
 		r.dir = -1
 	case decimal.Crosover(v, r.last, 0):
 		r.dir = 1
+	case v > r.last && r.dir > 0:
+		r.dir++
+	case v < r.last && r.dir < 0:
+		r.dir--
 	default:
 		r.dir = 0
 	}
@@ -84,9 +116,9 @@ func (r *macd) Update(v Decimal) {
 }
 
 func (r *macd) ShouldBuy() bool {
-	return r.dir > 0
+	return r.dir > r.res
 }
 
 func (r *macd) ShouldSell() bool {
-	return r.dir < 0
+	return r.dir < -r.res
 }

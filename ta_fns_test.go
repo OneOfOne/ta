@@ -33,12 +33,12 @@ func TestTA(t *testing.T) {
 
 	ta.Fill(0, 10, 42)
 	for i := 0; i < 10; i++ {
-		if ta.At(i) != 42 {
-			t.Fatalf("expected 42, got %v", ta.At(i))
+		if ta.Get(i) != 42 {
+			t.Fatalf("expected 42, got %v", ta.Get(i))
 		}
 	}
 
-	if ta.At(10) == 42 {
+	if ta.Get(10) == 42 {
 		t.Fatal("expected a random number, got 42")
 	}
 
@@ -58,9 +58,6 @@ func TestTA(t *testing.T) {
 	if parts[0].Len() != 3 || parts[1].Len() != 3 || parts[2].Len() != 3 || parts[3].Len() != 2 {
 		t.Fatalf("expected 3x3, 1x2 parts, got %v", parts)
 	}
-
-	t.Logf("%+v", parts)
-	t.Logf("%.50f", parts)
 }
 
 func TestGroupBy(t *testing.T) {
@@ -80,25 +77,60 @@ func TestGroupBy(t *testing.T) {
 	}
 }
 
-func TestRing(t *testing.T) {
+func TestCapped(t *testing.T) {
 	t.Parallel()
-	exp := New([]float64{1, 2, 3, 4, 5})
-	s := NewSize(5, false).Capped()
+	exp := New([]float64{496, 497, 498, 499, 500})
+	s := NewCapped(5)
+	for i := 0; i < s.Len()*100; i++ {
+		// m1 := int(s.Push(Decimal(i + 1)))
+		s.Push(Decimal((i + 1)))
+		// t.Log(s.v)
+		if i < 10 {
+			continue
+		}
+		for j := 0; j < s.Len(); j++ {
+			t.Log(i, j)
+			exp := i - ((i / s.Len()) + j)
+			if v := int(s.Get(j)); v != exp {
+				t.Fatal(i, j, v, i/5, exp, s.v)
+			}
+		}
+		// m1 := int(s.At((4 - 1)))
+		// m2 := int(s.At((3 - 1)))
+		// m3 := int(s.At((2 - 1)))
+		// if m1 != i || m2 != i-1 || m3 != i-2 || int(s.At(0)) != i-3 {
+		// 	t.Log(*s.idx)
+		// 	t.Fatalf("expected (%d, %d, %d, %d), got (%v, %v, %v, %v) (%v) ", i, i-1, i-2, i-3, m1, m2, m3, s.At(0), s.v)
+		// }
+	}
+	if !s.Equal(exp) {
+		t.Fatal("s != exp", s, s.v, exp)
+	}
+
+	exp = New([]float64{2, 4, 6, 8, 10})
 	for i := 0; i < s.Len(); i++ {
-		s.PushCapped(Decimal(i + 1))
-	}
-	if !s.Equal(exp) {
-		t.Fatal("s != exp")
-	}
-
-	exp = New([]float64{2, 4, 6, 8, 5})
-	for i := 0; i < s.Len()-1; i++ {
-		s.PushCapped(Decimal((i + 1) * 2))
+		s.Push(Decimal((i + 1) * 2))
 	}
 
 	if !s.Equal(exp) {
-		t.Fatal("s != exp")
+		t.Fatal("s != exp", s.v, exp, s.Get(0))
 	}
+
+	ta := NewCapped(3)
+	for i := 0; i < 10; i++ {
+		t.Log(i, ta.v)
+		ta.Push(Decimal(i + 1))
+	}
+	t.Log(ta.v)
+	if v := ta.Raw(); !decimal.SliceEqual(v, []Decimal{10, 8, 9}) {
+		t.Fatalf("wrong slice value x1: %+v", v)
+	}
+
+	if v := ta.Slice(0, 3).Raw(); !decimal.SliceEqual(v, []Decimal{8, 9, 10}) {
+		t.Fatalf("wrong slice value x2: %+v", v)
+	}
+	v := ta.Slice(0, 3)
+	t.Log(ta.v, v.v, ta.idx, ta, v)
 }
 
 func TestMathFuncs(t *testing.T) {

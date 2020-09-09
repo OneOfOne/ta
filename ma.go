@@ -1,41 +1,53 @@
 package ta // import "go.oneofone.dev/ta"
 
-// MovingAverageFunc defines a function that returns am updatable moving average for the given period
-type MovingAverageFunc func(period int) Study
+type MovingAverage interface {
+	Setup(d *TA) *TA
+	Update(v Decimal) Decimal
+	Len() int
+	ma()
+}
 
-func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, Study) {
+type implMA struct{}
+
+func (implMA) ma() {}
+
+// MovingAverageFunc defines a function that returns am updatable moving average for the given period
+type MovingAverageFunc func(period int) MovingAverage
+
+func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, MovingAverage) {
 	ma := fn(period)
 	return ma.Setup(ta), ma
 }
 
 // SMA - Simple Moving Average
-func (ta *TA) SMA(period int) (*TA, Study) {
+func (ta *TA) SMA(period int) (*TA, MovingAverage) {
 	return ta.MovingAverage(SMA, period)
 }
 
 // SMA - Simple Moving Average
-func SMA(period int) Study {
+func SMA(period int) MovingAverage {
 	checkPeriod(period, 2)
 	return &liveSMA{
-		data:   NewSize(period, false),
+		data:   NewCapped(period),
 		period: period,
 	}
 }
 
 type liveSMA struct {
+	implMA
 	data   *TA
+	idx    int
 	sum    Decimal
 	period int
 	count  int
 }
 
 func (l *liveSMA) Setup(d *TA) *TA {
-	return d.Map(l.Update, false).Slice(-l.period+1, 0)
+	return d.Map(l.Update, false).Slice(-l.period, 0)
 }
 
 func (l *liveSMA) Update(v Decimal) Decimal {
-	prev := l.data.PushCapped(v)
-
+	prev := l.data.Push(v)
 	if l.count < l.period {
 		l.count++
 	}
@@ -46,25 +58,19 @@ func (l *liveSMA) Update(v Decimal) Decimal {
 
 func (l *liveSMA) Len() int { return l.period }
 
-func (l *liveSMA) Clone() Study {
-	cp := *l
-	cp.data = l.data.Copy()
-	return &cp
-}
-
 // EMA - Exponential Moving Average
-func (ta *TA) EMA(period int) (*TA, Study) {
+func (ta *TA) EMA(period int) (*TA, MovingAverage) {
 	return ta.MovingAverage(EMA, period)
 }
 
 // EMA - Exponential Moving Average
 // An alias for CustomEMA(period, 2 / (period+1))
-func EMA(period int) Study {
+func EMA(period int) MovingAverage {
 	return CustomEMA(period, 0)
 }
 
 // CustomEMA - returns an updatable EMA with the given k
-func CustomEMA(period int, k Decimal) Study {
+func CustomEMA(period int, k Decimal) MovingAverage {
 	checkPeriod(period, 2)
 	if k == 0 {
 		k = Decimal(2 / float64(period+1))
@@ -76,6 +82,7 @@ func CustomEMA(period int, k Decimal) Study {
 }
 
 type liveEMA struct {
+	implMA
 	k      Decimal
 	prevMA Decimal
 	period int
@@ -106,29 +113,24 @@ func (l *liveEMA) Update(v Decimal) Decimal {
 
 func (l *liveEMA) Len() int { return l.period }
 
-func (l *liveEMA) Clone() Study {
-	cp := *l
-	return &cp
-}
-
 func (l *liveEMA) copy() liveEMA {
 	return *l
 }
 
 // WMA - Exponential Moving Average
-func (ta *TA) WMA(period int) (*TA, Study) {
+func (ta *TA) WMA(period int) (*TA, MovingAverage) {
 	return ta.MovingAverage(WMA, period)
 }
 
 // WMA - Exponential Moving Average
 // An alias for CustomWMA(period, (period * (period + 1)) >> 1)
-func WMA(period int) Study {
+func WMA(period int) MovingAverage {
 	w := Decimal((period * (period + 1)) >> 1)
 	return CustomWMA(period, w)
 }
 
 // CustomWMA returns an updatable WMA with the given weight
-func CustomWMA(period int, weight Decimal) Study {
+func CustomWMA(period int, weight Decimal) MovingAverage {
 	checkPeriod(period, 2)
 	return &liveWMA{
 		data:   NewSize(period, false),
@@ -138,6 +140,7 @@ func CustomWMA(period int, weight Decimal) Study {
 }
 
 type liveWMA struct {
+	implMA
 	data        *TA
 	weight      Decimal
 	sum         Decimal
@@ -151,10 +154,10 @@ func (l *liveWMA) Setup(d *TA) *TA {
 	l.set = true
 	var sum, wsum Decimal
 	for i := 0; i < l.period-1; i++ {
-		v := d.At(i)
+		v := d.Get(i)
 		wsum += v * Decimal(i+1)
 		sum += v
-		l.data.SetAt(i, v)
+		l.data.Set(i, v)
 	}
 	l.sum, l.weightedSum = sum, wsum
 	l.idx = l.period - 2
@@ -164,7 +167,7 @@ func (l *liveWMA) Setup(d *TA) *TA {
 
 func (l *liveWMA) Update(v Decimal) Decimal {
 	if !l.set {
-		l.data.SetAt(l.idx, v)
+		l.data.Set(l.idx, v)
 		if l.idx < l.period-1 {
 			l.idx++
 			l.weightedSum += v * Decimal(l.idx)
@@ -175,32 +178,26 @@ func (l *liveWMA) Update(v Decimal) Decimal {
 		l.set = true
 	}
 	l.idx = (l.idx + 1) % l.period
-	l.data.SetAt(l.idx, v)
+	l.data.Set(l.idx, v)
 	l.weightedSum += v * Decimal(l.period)
 	l.sum += v
 	rv := l.weightedSum / l.weight
 	l.weightedSum -= l.sum
 
 	pidx := (l.idx + 1) % l.period
-	l.sum -= l.data.At(pidx)
+	l.sum -= l.data.Get(pidx)
 	return rv
 }
 
 func (l *liveWMA) Len() int { return l.period }
 
-func (l *liveWMA) Clone() Study {
-	cp := *l
-	cp.data = l.data.Copy()
-	return &cp
-}
-
 // DEMA - Double Exponential Moving Average
-func (ta *TA) DEMA(period int) (*TA, Study) {
+func (ta *TA) DEMA(period int) (*TA, MovingAverage) {
 	return ta.MovingAverage(DEMA, period)
 }
 
 // DEMA - Double Exponential Moving Average
-func DEMA(period int) Study {
+func DEMA(period int) MovingAverage {
 	checkPeriod(period, 2)
 	e1 := EMA(period).(*liveEMA)
 	return &liveDEMA{
@@ -210,6 +207,7 @@ func DEMA(period int) Study {
 }
 
 type liveDEMA struct {
+	implMA
 	e1, e2 liveEMA
 	period int
 	idx    int
@@ -231,20 +229,13 @@ func (l *liveDEMA) Update(v Decimal) Decimal {
 
 func (l *liveDEMA) Len() int { return l.period }
 
-func (l *liveDEMA) Clone() Study {
-	cp := *l
-	cp.e1 = cp.e1.copy()
-	cp.e2 = cp.e2.copy()
-	return &cp
-}
-
 // TEMA - Triple Exponential Moving Average
-func (ta *TA) TEMA(period int) (*TA, Study) {
+func (ta *TA) TEMA(period int) (*TA, MovingAverage) {
 	return ta.MovingAverage(TEMA, period)
 }
 
 // TEMA - Triple Exponential Moving Average
-func TEMA(period int) Study {
+func TEMA(period int) MovingAverage {
 	checkPeriod(period, 2)
 	e1 := EMA(period).(*liveEMA)
 	return &liveTEMA{
@@ -254,6 +245,7 @@ func TEMA(period int) Study {
 }
 
 type liveTEMA struct {
+	implMA
 	e1, e2, e3 liveEMA
 	period     int
 	idx        int
@@ -278,13 +270,6 @@ func (l *liveTEMA) Update(v Decimal) Decimal {
 }
 
 func (l *liveTEMA) Len() int { return l.period }
-
-func (l *liveTEMA) Clone() Study {
-	cp := *l
-	cp.e1 = *(l.e1.Clone().(*liveEMA))
-	cp.e2 = *(l.e2.Clone().(*liveEMA))
-	return &cp
-}
 
 // TODO:
 // - Trima

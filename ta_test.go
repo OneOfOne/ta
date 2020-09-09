@@ -71,7 +71,7 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 	}
 
 	for i := 0; i < res.Len(); i++ {
-		gr, pr := res.At(i), pyres.At(i)
+		gr, pr := res.Get(i), pyres.Get(i)
 		if gr.IsNaN() {
 			gr = 0.0
 		}
@@ -79,8 +79,8 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 		if !decimal.EqualApprox(gr.Float(), pr.Float(), 1e-6) {
 			t.Fatalf("[@%d] got %#v, expected %#v (diff %.20f)\ngo: %v\npy: %v",
 				i, gr, pr, gr.Sub(pr).Abs(),
-				res.Slice(MaxInt(0, i-4), MinInt(res.Len(), i+4)),
-				pyres.Slice(MaxInt(0, i-4), MinInt(pyres.Len(), i+4)))
+				res.v[MaxInt(0, i-4):MinInt(res.Len(), i+4)],
+				pyres.v[MaxInt(0, i-4):MinInt(pyres.Len(), i+4)])
 		}
 	}
 }
@@ -96,53 +96,27 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSMA(t *testing.T) {
-	testMA(t, "SMA", SMA, 120)
-}
+func TestSMA(t *testing.T) { testMA(t, "SMA", SMA, 120) }
 
-func BenchmarkSMA(b *testing.B) {
-	benchMA(b, "SMA", 10, SMA)
-}
+func BenchmarkSMA(b *testing.B) { benchMA(b, "SMA", 10, SMA) }
 
-func TestEMA(t *testing.T) {
-	testMA(t, "EMA", EMA, -1)
-}
+func TestEMA(t *testing.T) { testMA(t, "EMA", EMA, -1) }
 
-func BenchmarkEMA(b *testing.B) {
-	benchMA(b, "EMA", 10, EMA)
-}
+func BenchmarkEMA(b *testing.B) { benchMA(b, "EMA", 10, EMA) }
 
-func TestWMA(t *testing.T) {
-	testMA(t, "WMA", WMA, -1)
-}
+func TestWMA(t *testing.T) { testMA(t, "WMA", WMA, -1) }
 
-func BenchmarkWMA(b *testing.B) {
-	benchMA(b, "WMA", 10, WMA)
-}
+func BenchmarkWMA(b *testing.B) { benchMA(b, "WMA", 10, WMA) }
 
-func TestDEMA(t *testing.T) {
-	testMA(t, "DEMA", DEMA, 36)
-}
+func TestDEMA(t *testing.T) { testMA(t, "DEMA", DEMA, 36) }
 
-func BenchmarkDEMA(b *testing.B) {
-	benchMA(b, "DEMA", 10, DEMA)
-}
+func BenchmarkDEMA(b *testing.B) { benchMA(b, "DEMA", 10, DEMA) }
 
-func TestTEMA(t *testing.T) {
-	testMA(t, "TEMA", TEMA, 32)
-}
+func TestTEMA(t *testing.T) { testMA(t, "TEMA", TEMA, 32) }
 
-func BenchmarkTEMA(b *testing.B) {
-	benchMA(b, "TEMA", 10, TEMA)
-}
+func BenchmarkTEMA(b *testing.B) { benchMA(b, "TEMA", 10, TEMA) }
 
-func TestRSI(t *testing.T) {
-	testMA(t, "RSI", RSI, 120)
-}
-
-func BenchmarkRSI(b *testing.B) {
-	benchMA(b, "RSI", 10, RSI)
-}
+func TestRSI(t *testing.T) { testStudy(t, "RSI", RSI, 120) }
 
 func TestMACD(t *testing.T) {
 	t.Parallel()
@@ -158,7 +132,7 @@ func TestMACD(t *testing.T) {
 
 func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ string) {
 	t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, fast, slow, sig), func(t *testing.T) {
-		macd, macdsignal, macdhist, _ := testClose.MACDExt(fn(fast), fn(slow), fn(sig))
+		macd, macdsignal, macdhist, _ := testClose.MACDMulti(fn(fast), fn(slow), fn(sig))
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
 		compare(t, macd, "result, macdsignal, macdhist = %s", pyfn)
@@ -184,6 +158,20 @@ func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
 				t.Log(cmp)
 				t.Fatal()
 			}
+			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
+		})
+	}
+}
+
+func testStudy(t *testing.T, name string, fn func(period int) Study, maxPeriod int) {
+	t.Parallel()
+	for _, period := range maSteps {
+		if maxPeriod > -1 && period > maxPeriod {
+			t.Skipf("%s > %d overflows python", name, maxPeriod)
+		}
+		t.Run(strconv.Itoa(period), func(t *testing.T) {
+			st := fn(period)
+			res := testClose.Map(st.Update, false).Slice(-st.Len(), 0)
 			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}

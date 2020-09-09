@@ -296,3 +296,16 @@ func Crosover(curr, prev, mark Decimal) bool {
 func Crossunder(curr, prev, mark Decimal) bool {
 	return curr <= mark && prev > mark
 }
+
+func SliceEqual(a, b []Decimal) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, av := range a {
+		if av.NotEqual(b[i]) {
+			return false
+		}
+	}
+
+	return true
+}

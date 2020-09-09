@@ -20,6 +20,13 @@ const (
 	One  = Decimal(1)
 )
 
+func NewCapped(size int) *TA {
+	return &TA{
+		v:   make([]Decimal, size),
+		idx: new(int),
+	}
+}
+
 func NewSize(size int, cap bool) *TA {
 	if cap {
 		return &TA{v: make([]Decimal, 0, size)}
@@ -48,55 +55,63 @@ func (ta *TA) index(i int) int {
 	if i < 0 {
 		i = len(ta.v) + i
 	}
-	if ta.idx == nil {
+	if ta.idx == nil || len(ta.v) < cap(ta.v) {
 		return i
 	}
-	return i % len(ta.v)
+	idx := (*ta.idx + i) % len(ta.v)
+	if idx < 0 {
+		idx += len(ta.v)
+	}
+	return idx
 }
 
-// Capped will convert TA to a buffer ring of sorts
-// See `TA.Append`
-func (ta *TA) Capped() *TA {
-	ta.idx = new(int)
-	return ta
+func (ta *TA) Get(i int) Decimal {
+	if i = ta.index(i + 1); i >= len(ta.v) || i < 0 {
+		return 0
+	}
+	return ta.v[i]
 }
 
-// PushCapped will push v to the ringbuffer and return the previous value
-// It will automatically convert the TA to Capped
-func (ta *TA) PushCapped(v Decimal) (prev Decimal) {
-	if ln := len(ta.v); ln < cap(ta.v) {
-		if len(ta.v) > 0 {
-			prev = ta.v[ln-1]
+func (ta *TA) Set(i int, v Decimal) {
+	ta.v[ta.index(i)] = v
+}
+
+// Push will push v to the ringbuffer and return the previous value at the end of the buffer
+func (ta *TA) Push(v Decimal) (prev Decimal) {
+	if ta.idx == nil || len(ta.v) < cap(ta.v) {
+		if i := len(ta.v); i > 0 {
+			prev = ta.v[i-1]
 		}
 		ta.v = append(ta.v, v)
-		ta.idx = &ln
+		if ta.idx != nil {
+			*ta.idx = len(ta.v) - 1
+		}
 		return
 	}
 
-	i := 0
-	if ta.idx != nil {
-		i = *ta.idx % len(ta.v)
-	}
+	i := (*ta.idx + 1) % len(ta.v)
 	prev = ta.v[i]
 	ta.v[i] = v
-	i++
-	ta.idx = &i
+	*ta.idx = i
 	return
 }
 
 // Append appends v to the underlying buffer,
 // if `Capped` was called it i'll act as a ring buffer rather than a slice
-func (ta *TA) Append(v Decimal) *TA {
-	if ta.idx == nil || len(ta.v) < cap(ta.v) {
-		ta.v = append(ta.v, v)
+func (ta *TA) Append(vs ...Decimal) *TA {
+	// log.Println(ta.idx, len(ta.v)+len(vs), len(ta.v)+len(vs) <= cap(ta.v))
+	if ta.idx == nil || len(ta.v)+len(vs) <= cap(ta.v) {
+		ta.v = append(ta.v, vs...)
 		return ta
 	}
-	i := 0
-	if ta.idx != nil {
-		i = (*ta.idx + 1) % len(ta.v)
+
+	i := *ta.idx
+	for _, v := range vs {
+		ta.v[i%len(ta.v)] = v
+		i++
 	}
+
 	ta.idx = &i
-	ta.v[i] = v
 	return ta
 }
 
@@ -145,12 +160,25 @@ func (ta *TA) Slice(i, j int) *TA {
 	} else {
 		j = MinInt(ln, AbsInt(i+j))
 	}
-	return &TA{v: ta.v[i:j:j]}
+
+	if ta.idx == nil {
+		return &TA{v: ta.v[i:j:j]}
+	}
+
+	out := make([]Decimal, 0, j-i)
+	idx := int(*ta.idx)
+	i += idx
+	j += idx
+	for ; i < j; i++ {
+		out = append(out, ta.Get(i))
+	}
+
+	return &TA{v: out}
 }
 
 func (ta *TA) Last() Decimal {
 	if ln := ta.Len(); ln > 0 {
-		return ta.At(ln - 1)
+		return ta.Get(ln - 1)
 	}
 	return 0
 }
@@ -159,7 +187,7 @@ func (ta *TA) Len() int {
 	if ta == nil {
 		return 0
 	}
-	return len(ta.v)
+	return cap(ta.v)
 }
 
 // Floats returns the taice as []float64, without a copy
@@ -178,21 +206,13 @@ func (ta *TA) Copy() *TA {
 	return &TA{v: append([]Decimal(nil), ta.v...)}
 }
 
-func (ta *TA) At(i int) Decimal {
-	return ta.v[ta.index(i)]
-}
-
-func (ta *TA) SetAt(i int, v Decimal) {
-	ta.v[ta.index(i)] = v
-}
-
 func (ta *TA) Equal(o *TA) bool {
 	if ta.Len() != o.Len() {
 		return false
 	}
 
 	for i := 0; i < ta.Len(); i++ {
-		if ta.At(i).NotEqual(o.At(i)) {
+		if ta.Get(i).NotEqual(o.Get(i)) {
 			return false
 		}
 	}
@@ -240,7 +260,7 @@ func (ta *TA) Crossover(o *TA) bool {
 		panic("o.Len() < 3")
 	}
 
-	return ta.At(-2) <= o.At(-2) && ta.At(-1) > o.At(-1)
+	return ta.Get(-2) <= o.Get(-2) && ta.Get(-1) > o.Get(-1)
 }
 
 func (ta *TA) Crossunder(o *TA) bool {
@@ -249,7 +269,7 @@ func (ta *TA) Crossunder(o *TA) bool {
 		panic("o.Len() < 3")
 	}
 
-	return ta.At(-1) <= o.At(-1) && ta.At(-2) > o.At(-2)
+	return ta.Get(-1) <= o.Get(-1) && ta.Get(-2) > o.Get(-2)
 }
 
 func (ta *TA) Fill(start, length int, v Decimal) *TA {
@@ -368,7 +388,7 @@ func (ta *TA) Format(f fmt.State, c rune) {
 	}
 
 	if hasPlus {
-		io.WriteString(f, "&TA{")
+		io.WriteString(f, "&TA{data: [")
 	} else {
 		io.WriteString(f, "[")
 	}
@@ -377,7 +397,7 @@ func (ta *TA) Format(f fmt.State, c rune) {
 		if i > 0 {
 			io.WriteString(f, ", ")
 		}
-		v := ta.At(i).Text(byte(c), prec)
+		v := ta.Get(i).Text(byte(c), prec)
 		if w := wid - len(v); w > 0 {
 			if hasZero {
 				io.WriteString(f, strings.Repeat("0", w))
@@ -387,7 +407,12 @@ func (ta *TA) Format(f fmt.State, c rune) {
 		}
 		io.WriteString(f, v)
 	}
+
 	if hasPlus {
+		io.WriteString(f, "]")
+		if ta.idx != nil {
+			io.WriteString(f, ", capped: true")
+		}
 		io.WriteString(f, "}")
 	} else {
 		io.WriteString(f, "]")

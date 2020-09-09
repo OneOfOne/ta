@@ -56,29 +56,13 @@ func (r *Result) PLPerc() Decimal {
 	return ((r.PL() / r.Total()) * 100).Floor(100)
 }
 
-type Order struct {
-	ID     string
-	Symbol string
-	Price  Decimal
-	Count  int
-	Profit Decimal
-	Loss   Decimal
-}
-
-func (o *Order) price() (min, max Decimal) {
-	p := o.Price
-	if min = o.Profit; min != 0 {
-		min = p - (p * min)
-	}
-
-	if max = o.Loss; max != 0 {
-		max = p + (p * max)
-	}
-	return
-}
-
 type (
-	TxFunc func(r *Result) (orders []*Order)
+	Order struct {
+		ID     string
+		Symbol string
+		Price  Decimal
+		Count  int
+	}
 
 	Options struct {
 		Balance         Decimal
@@ -87,8 +71,8 @@ type (
 
 		AllowShort bool
 
-		Buy  TxFunc
-		Sell TxFunc
+		Buy  func(r *Result) (orders []*Order)
+		Sell func(r *Result, o Order) (pricePerShare Decimal)
 	}
 )
 
@@ -145,21 +129,15 @@ func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan De
 				r.Orders = append(r.Orders, bought...)
 
 			case shouldSell:
-				sold := opts.Sell(r)
-				if len(sold) == 0 {
-					goto L
-				}
-				var out []*Order
-			O:
+				out := r.Orders[:0]
 				for _, o := range r.Orders {
-					for _, oo := range sold {
-						if oo.ID == o.ID {
-							r.Sold += oo.Count
-							r.Balance += (oo.Price * Decimal(oo.Count))
-							continue O
-						}
+					pricePerShare := opts.Sell(r, *o)
+					if pricePerShare == 0 {
+						out = append(out, o)
+						continue
 					}
-					out = append(out, o)
+					r.Sold += o.Count
+					r.Balance += (pricePerShare * Decimal(o.Count))
 				}
 				r.Orders = out
 			default:
@@ -177,7 +155,7 @@ func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxSh
 	in := make(chan Decimal, 10)
 	go func() {
 		for i := 0; i < data.Len(); i++ {
-			in <- data.At(i)
+			in <- data.Get(i)
 		}
 		close(in)
 	}()
@@ -198,19 +176,8 @@ func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxSh
 				{ID: strconv.Itoa(id), Count: numShares, Price: r.LastPrice},
 			}
 		},
-		Sell: func(r *Result) (out []*Order) {
-			numShares := r.NumShares()
-			if numShares < 0 {
-				return
-			}
-
-			for _, o := range r.Orders {
-				if numShares -= o.Count; numShares >= 0 {
-					o.Price = r.LastPrice
-					out = append(out, o)
-				}
-			}
-			return
+		Sell: func(r *Result, o Order) (pricePerShare Decimal) {
+			return r.LastPrice
 		},
 	})
 }
@@ -263,19 +230,17 @@ func Mixed(buyStrat, sellStrat Strategy) Strategy {
 	return &mixed{buyStrat, sellStrat}
 }
 
-type mixed struct {
-	buy, sell Strategy
-}
+type mixed [2]Strategy
 
 func (m *mixed) Update(v Decimal) {
-	m.buy.Update(v)
-	m.sell.Update(v)
+	m[0].Update(v)
+	m[1].Update(v)
 }
 
 func (m *mixed) ShouldBuy() bool {
-	return m.buy.ShouldBuy()
+	return m[0].ShouldBuy()
 }
 
 func (m *mixed) ShouldSell() bool {
-	return m.sell.ShouldSell()
+	return m[1].ShouldSell()
 }
