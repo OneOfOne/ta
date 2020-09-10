@@ -130,6 +130,36 @@ func TestMACD(t *testing.T) {
 	}
 }
 
+func TestVWAP(t *testing.T) {
+	data := [][2]Decimal{
+		{2.5, 268},
+		{7.5, 269},
+		//{8.5, 269.5},
+	}
+
+	vwap := VWAP(2)
+
+	var last Decimal
+	for _, d := range data {
+		vw := vwap.Update(d[0], d[1])
+		// t.Log(d[0], d[1], vw)
+		last = vw[0]
+	}
+
+	if last != 268.75 {
+		t.Fatalf("expected 268.75, got %v", last)
+	}
+
+	vwap = VWAP(2)
+
+	vol := NewSize(2, true).Append(2.5, 7.5)
+	prices := NewSize(2, true).Append(268, 269)
+	t.Log(vwap.Setup(vol, prices))
+	if last = vwap.Setup(vol, prices)[0].Last(); last != 268.75 {
+		t.Fatalf("expected 268.75, got %v", last)
+	}
+}
+
 func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ string) {
 	t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, fast, slow, sig), func(t *testing.T) {
 		macd, macdsignal, macdhist, _ := testClose.MACDMulti(fn(fast), fn(slow), fn(sig))

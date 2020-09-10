@@ -5,22 +5,25 @@ import (
 )
 
 // Trailing with Strat sets a trailing win/loss stop point based on the strategy
-func Trailing(str Strategy, maxLoss, maxWin Decimal) Strategy {
+func Trailing(str Strategy, maxGain, maxLoss Decimal) Strategy {
 	return &trailing{str: str}
 }
 
-type order struct {
-	cost Decimal
-	high Decimal
-	low  Decimal
+type trailingOrder struct {
+	Order
+	max Decimal
+	min Decimal
 }
 
 type trailing struct {
-	str    Strategy
-	orders []Decimal
-	last   Decimal
-	idx    int
-	dir    int8
+	dummyStrategy
+	str      Strategy
+	gainPerc Decimal
+	lossPerc Decimal
+	orders   []*trailingOrder
+	last     Decimal
+	idx      int
+	dir      int8
 }
 
 func (r *trailing) checkSell(v Decimal) int {
@@ -45,8 +48,13 @@ func (r *trailing) Update(v Decimal) {
 	r.last = v
 }
 
-func (r *trailing) ShouldBuy() bool {
-	return r.dir > 0
+func (r *trailing) NotifyBuy(o Order) {
+	no := &trailingOrder{
+		Order: o,
+	}
+	no.max = o.Price * (1 + r.gainPerc)
+	no.min = o.Price * (1 - r.lossPerc)
+	r.orders = append(r.orders, no)
 }
 
 func (r *trailing) ShouldSell() bool {

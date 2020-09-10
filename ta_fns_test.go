@@ -84,7 +84,7 @@ func TestCapped(t *testing.T) {
 	s := NewCapped(5)
 	for i := 0; i < s.Len()*100; i++ {
 		// m1 := int(s.Push(Decimal(i + 1)))
-		s.Push(Decimal((i + 1)))
+		s.Update(Decimal((i + 1)))
 		// t.Log(s.v)
 		if i < 10 {
 			continue
@@ -110,7 +110,7 @@ func TestCapped(t *testing.T) {
 
 	exp = New([]float64{2, 4, 6, 8, 10})
 	for i := 0; i < s.Len(); i++ {
-		s.Push(Decimal((i + 1) * 2))
+		s.Update(Decimal((i + 1) * 2))
 	}
 
 	if !s.Equal(exp) {
@@ -120,7 +120,7 @@ func TestCapped(t *testing.T) {
 	ta := NewCapped(3)
 	for i := 0; i < 10; i++ {
 		t.Log(i, ta.v)
-		ta.Push(Decimal(i + 1))
+		ta.Update(Decimal(i + 1))
 	}
 	t.Log(ta.v)
 	if v := ta.Raw(); !decimal.SliceEqual(v, []Decimal{9, 10, 8}) {
@@ -181,6 +181,10 @@ func TestMathOps(t *testing.T) {
 			compare(t, res, "result = talib.%s(testHigh, testLow)", strings.ToUpper(fn.name))
 		})
 	}
+
+	a := New([]float64{3, 4, 5, 6})
+	b := New([]float64{2, 2, 2, 2})
+	t.Log(a.Mul(b))
 }
 
 func TestCrossOverUnder(t *testing.T) {

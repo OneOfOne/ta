@@ -8,6 +8,7 @@ import (
 
 	"go.oneofone.dev/ta/decimal"
 	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
 )
 
 // Decimal is an alias to the underlying type we use.
@@ -76,9 +77,13 @@ func (ta *TA) Set(i int, v Decimal) {
 	ta.v[ta.index(i)] = v
 }
 
-// Push will push v to the ringbuffer and return the previous value at the end of the buffer
-func (ta *TA) Push(v Decimal) (prev Decimal) {
-	if ta.idx == nil || len(ta.v) < cap(ta.v) {
+// Update pushes v to the end of the "buffer" and returns the previous value
+// It will panic unless the ta was created with `NewCapped`
+func (ta *TA) Update(v Decimal) (prev Decimal) {
+	if ta.idx == nil {
+		panic("requires a capped TA")
+	}
+	if len(ta.v) < cap(ta.v) {
 		if i := len(ta.v); i > 0 {
 			prev = ta.v[i-1]
 		}
@@ -107,10 +112,10 @@ func (ta *TA) Append(vs ...Decimal) *TA {
 		return ta
 	}
 
-	i := (*ta.idx + 1) % len(ta.v)
+	i := *ta.idx
 	for _, v := range vs {
-		ta.v[i] = v
 		i = (i + 1) % len(ta.v)
+		ta.v[i] = v
 	}
 
 	*ta.idx = i
@@ -189,10 +194,18 @@ func (ta *TA) Len() int {
 	return cap(ta.v)
 }
 
-// Floats returns the taice as []float64, without a copy
+// Floats returns the taice as []float64, without a copy if not capped
+// if ta is capped, it'll create a copy
 func (ta *TA) Floats() []float64 {
-	// this must be changed if decimal != float64
-	return *(*[]float64)(unsafe.Pointer(&ta.v))
+	if ta.idx == nil {
+		// this must be changed if decimal != float64
+		return *(*[]float64)(unsafe.Pointer(&ta.v))
+	}
+	out := make([]float64, 0, ta.Len())
+	for i := 0; i < ta.Len(); i++ {
+		out = append(out, ta.Get(i).Float())
+	}
+	return out
 }
 
 // Raw returns the underlying data slice
@@ -295,26 +308,24 @@ func (ta *TA) GroupBy(fn func(idx int, v Decimal) (group bool), aggFn func(*TA) 
 		fs   = ta.v[:0]
 		last int
 		ln   = ta.Len()
-		vs   = ta.v
-		out  = ta
+		out  *TA
 	)
 
 	if !inPlace {
 		fs = []Decimal{}
-		out = &TA{}
 	}
 
 	for i, last := 0, 0; i < ln; i++ {
-		v := vs[i]
+		v := ta.Get(i)
 		if fn(i, v) {
-			out.v = vs[last : i+1]
+			out = ta.Slice(last, i+1)
 			fs = append(fs, aggFn(out))
 			last = i + 1
 		}
 	}
 
 	if last < ln {
-		out.v = vs[last:]
+		out = ta.Slice(last, 0)
 		fs = append(fs, aggFn(out))
 	}
 
@@ -364,8 +375,36 @@ func (ta *TA) Sum() Decimal {
 	return Decimal(s)
 }
 
+// CumSum finds the cumulative sum of the ta
+func (ta *TA) CumSum() *TA {
+	dst := floats.CumSum(make([]float64, ta.Len()), ta.Floats())
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&dst))}
+}
+
+// CumProd finds the cumulative product of the ta
+func (ta *TA) CumProd() *TA {
+	dst := floats.CumProd(make([]float64, ta.Len()), ta.Floats())
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&dst))}
+}
+
+func (ta *TA) Product() Decimal {
+	return Decimal(floats.Prod(ta.Floats()))
+}
+
 func (ta *TA) Avg() Decimal {
 	return ta.Sum().Div(Decimal(float64(len(ta.v))))
+}
+
+func (ta *TA) Dot(o *TA) Decimal {
+	return Decimal(floats.Dot(ta.Floats(), o.Floats()))
+}
+
+func (ta *TA) StdDev() Decimal {
+	return Decimal(stat.StdDev(ta.Floats(), nil))
+}
+
+func (ta *TA) Variance() Decimal {
+	return Decimal(stat.Variance(ta.Floats(), nil))
 }
 
 func (ta *TA) Format(f fmt.State, c rune) {

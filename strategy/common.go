@@ -15,6 +15,7 @@ func RSI(period, oversold, overbought int) Strategy {
 }
 
 type rsi struct {
+	dummyStrategy
 	rsi        ta.Study
 	oversold   Decimal
 	overbought Decimal
@@ -87,6 +88,7 @@ func MACDMulti(resistance int, fast, slow, signal ta.MovingAverage) Strategy {
 }
 
 type macd struct {
+	dummyStrategy
 	macd ta.StudyMulti
 	last Decimal
 	res  int

@@ -135,6 +135,13 @@ func (d Decimal) Pow(n int) Decimal {
 	return Decimal(v)
 }
 
+func (d Decimal) PercentOf(v Decimal) (value, plus, minus Decimal) {
+	value = d * v
+	plus = d + value
+	minus = d - value
+	return
+}
+
 func (d Decimal) Cmp(x Decimal) int {
 	if EqualApprox(float64(d), float64(x), Epsilon) {
 		return 0

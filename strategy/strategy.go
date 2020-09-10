@@ -15,7 +15,17 @@ type Strategy interface {
 	Update(v Decimal)
 	ShouldBuy() bool
 	ShouldSell() bool
+	NotifyBuy(o Order)
+	NotifySell(o Order)
 }
+
+type dummyStrategy struct{}
+
+func (dummyStrategy) Update(Decimal)   { panic("not implemented") }
+func (dummyStrategy) ShouldBuy() bool  { return false }
+func (dummyStrategy) ShouldSell() bool { return false }
+func (dummyStrategy) NotifyBuy(Order)  {}
+func (dummyStrategy) NotifySell(Order) {}
 
 type Result struct {
 	Symbol       string
@@ -190,6 +200,7 @@ func Merge(matchAll bool, strats ...Strategy) Strategy {
 }
 
 type merge struct {
+	dummyStrategy
 	strats []Strategy
 	all    bool
 }
@@ -227,20 +238,23 @@ func (m *merge) ShouldSell() bool {
 }
 
 func Mixed(buyStrat, sellStrat Strategy) Strategy {
-	return &mixed{buyStrat, sellStrat}
+	return &mixed{buy: buyStrat, sell: sellStrat}
 }
 
-type mixed [2]Strategy
+type mixed struct {
+	dummyStrategy
+	buy, sell Strategy
+}
 
 func (m *mixed) Update(v Decimal) {
-	m[0].Update(v)
-	m[1].Update(v)
+	m.buy.Update(v)
+	m.sell.Update(v)
 }
 
 func (m *mixed) ShouldBuy() bool {
-	return m[0].ShouldBuy()
+	return m.buy.ShouldBuy()
 }
 
 func (m *mixed) ShouldSell() bool {
-	return m[1].ShouldSell()
+	return m.sell.ShouldSell()
 }

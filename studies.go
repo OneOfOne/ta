@@ -10,6 +10,13 @@ type Study interface {
 	Len() int
 }
 
+// StudyMulti represents a study that accepts multiple values and returns multiple values, for example, MACD
+type StudyMulti interface {
+	Setup(...*TA) []*TA
+	Update(v ...Decimal) []Decimal
+	Len() []int
+}
+
 // RSI - Relative Strength Index
 func (ta *TA) RSI(period int) (*TA, Study) {
 	s := RSI(period)
@@ -91,13 +98,6 @@ func (l *liveRSI) Update(v Decimal) Decimal {
 
 func (l *liveRSI) Len() int { return l.period }
 
-// StudyMulti represents a study that accepts multiple values and returns multiple values, for example, MACD
-type StudyMulti interface {
-	Setup(...*TA) []*TA
-	Update(v ...Decimal) []Decimal
-	Len() []int
-}
-
 // MACD - Moving Average Convergence/Divergence, using EMA
 func (ta *TA) MACD(fastPeriod, slowPeriod, signalPeriod int) (macd, signal, hist *TA, _ StudyMulti) {
 	ma := MACD(fastPeriod, slowPeriod, signalPeriod)
@@ -137,7 +137,7 @@ func MACDMulti(fast, slow, signal MovingAverage) StudyMulti {
 	if slow.Len() < fast.Len() {
 		slow, fast = fast, slow
 	}
-	return &liveMACD{
+	return &macd{
 		slow:   slow,
 		fast:   fast,
 		signal: signal,
@@ -145,13 +145,13 @@ func MACDMulti(fast, slow, signal MovingAverage) StudyMulti {
 	}
 }
 
-type liveMACD struct {
+type macd struct {
 	slow, fast, signal MovingAverage
 
 	prev Decimal
 }
 
-func (l *liveMACD) Setup(ds ...*TA) []*TA {
+func (l *macd) Setup(ds ...*TA) []*TA {
 	d0ln := ds[0].Len()
 	macd := NewSize(d0ln, false)
 	signal := NewSize(d0ln, false)
@@ -171,7 +171,7 @@ func (l *liveMACD) Setup(ds ...*TA) []*TA {
 	return []*TA{macd, signal, hist}
 }
 
-func (l *liveMACD) Update(vs ...Decimal) []Decimal {
+func (l *macd) Update(vs ...Decimal) []Decimal {
 	var fast, slow, macd, sig Decimal
 	for _, v := range vs {
 		fast = l.fast.Update(v)
@@ -182,6 +182,75 @@ func (l *liveMACD) Update(vs ...Decimal) []Decimal {
 	return []Decimal{macd, sig, macd - sig}
 }
 
-func (l *liveMACD) Len() []int {
+func (l *macd) Len() []int {
 	return []int{l.slow.Len(), l.fast.Len(), l.signal.Len()}
+}
+
+func VWAP(period int) StudyMulti {
+	return VWAPBands(period, 2, -2)
+}
+
+func VWAPBands(period int, up, down Decimal) StudyMulti {
+	checkPeriod(period, 2)
+	if up == 0 || down == 0 {
+		panic("vwap: up and down most be not be 0")
+	}
+	return &vwap{
+		data: NewCapped(period),
+		up:   up,
+		down: down,
+	}
+}
+
+type vwap struct {
+	data  *TA
+	up    Decimal
+	down  Decimal
+	sum   Decimal
+	total Decimal
+}
+
+func (l *vwap) Setup(ds ...*TA) []*TA {
+	if len(ds) != 2 {
+		panic("vwap: must pass volume and price")
+	}
+	vol, price := ds[0], ds[1]
+	if vol.Len() != price.Len() {
+		panic("vwap: vol.Len() != price.Len()")
+	}
+
+	vw := NewCapped(l.data.Len())
+	up := NewCapped(l.data.Len())
+	dn := NewCapped(l.data.Len())
+	for i := 0; i < vol.Len(); i++ {
+		v, p := vol.Get(i), price.Get(i)
+		vud := l.Update(v, p)
+		vw.Append(vud[0])
+		up.Append(vud[1])
+		dn.Append(vud[2])
+
+	}
+	return []*TA{vw, up, dn}
+}
+
+func (l *vwap) Update(vs ...Decimal) []Decimal {
+	vol, price := vs[0], vs[1]
+	l.sum += vol * price
+	l.total += vol
+
+	var (
+		v    = l.sum / l.total
+		d    = l.data.Append(v).StdDev()
+		up   = v + d*l.up
+		down Decimal
+	)
+
+	if l.up != l.down {
+		down = v + d*l.down
+	}
+	return []Decimal{v, up, down}
+}
+
+func (l *vwap) Len() []int {
+	return []int{1}
 }
