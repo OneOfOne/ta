@@ -1,4 +1,4 @@
-package ta
+package ta // import "go.oneofone.dev/ta"
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"go.oneofone.dev/ta/decimal"
 	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
 )
 
 // Decimal is an alias to the underlying type we use.
@@ -19,6 +20,13 @@ const (
 	Zero = Decimal(0)
 	One  = Decimal(1)
 )
+
+func NewCapped(size int) *TA {
+	return &TA{
+		v:   make([]Decimal, size),
+		idx: new(int),
+	}
+}
 
 func NewSize(size int, cap bool) *TA {
 	if cap {
@@ -48,55 +56,69 @@ func (ta *TA) index(i int) int {
 	if i < 0 {
 		i = len(ta.v) + i
 	}
-	if ta.idx == nil {
+	if ta.idx == nil || len(ta.v) < cap(ta.v) {
 		return i
 	}
-	return i % len(ta.v)
+	idx := (*ta.idx + i + 1) % len(ta.v)
+	if idx < 0 {
+		idx += len(ta.v)
+	}
+	return idx
 }
 
-// Capped will convert TA to a buffer ring of sorts
-// See `TA.Append`
-func (ta *TA) Capped() *TA {
-	ta.idx = new(int)
-	return ta
+func (ta *TA) Get(i int) Decimal {
+	if i = ta.index(i); i >= len(ta.v) || i < 0 {
+		return 0
+	}
+	return ta.v[i]
 }
 
-// PushCapped will push v to the ringbuffer and return the previous value
-// It will automatically convert the TA to Capped
-func (ta *TA) PushCapped(v Decimal) (prev Decimal) {
-	if ln := len(ta.v); ln < cap(ta.v) {
-		if len(ta.v) > 0 {
-			prev = ta.v[ln-1]
+func (ta *TA) Set(i int, v Decimal) {
+	ta.v[ta.index(i)] = v
+}
+
+// Update pushes v to the end of the "buffer" and returns the previous value
+// It will panic unless the ta was created with `NewCapped`
+func (ta *TA) Update(v Decimal) (prev Decimal) {
+	if ta.idx == nil {
+		panic("requires a capped TA")
+	}
+	if len(ta.v) < cap(ta.v) {
+		if i := len(ta.v); i > 0 {
+			prev = ta.v[i-1]
 		}
 		ta.v = append(ta.v, v)
-		ta.idx = &ln
+		if ta.idx != nil {
+			*ta.idx = len(ta.v) - 1
+		}
 		return
 	}
 
-	i := 0
-	if ta.idx != nil {
-		i = *ta.idx % len(ta.v)
-	}
+	i := (*ta.idx + 1) % len(ta.v)
 	prev = ta.v[i]
 	ta.v[i] = v
-	i++
-	ta.idx = &i
+	*ta.idx = i
 	return
 }
 
 // Append appends v to the underlying buffer,
 // if `Capped` was called it i'll act as a ring buffer rather than a slice
-func (ta *TA) Append(v Decimal) *TA {
-	if ta.idx == nil || len(ta.v) < cap(ta.v) {
-		ta.v = append(ta.v, v)
+func (ta *TA) Append(vs ...Decimal) *TA {
+	if ta.idx == nil || len(ta.v)+len(vs) <= cap(ta.v) {
+		ta.v = append(ta.v, vs...)
+		if ta.idx != nil {
+			*ta.idx = len(ta.v) - 1
+		}
 		return ta
 	}
-	i := 0
-	if ta.idx != nil {
-		i = (*ta.idx + 1) % len(ta.v)
+
+	i := *ta.idx
+	for _, v := range vs {
+		i = (i + 1) % len(ta.v)
+		ta.v[i] = v
 	}
-	ta.idx = &i
-	ta.v[i] = v
+
+	*ta.idx = i
 	return ta
 }
 
@@ -142,15 +164,25 @@ func (ta *TA) Slice(i, j int) *TA {
 	}
 	if j == 0 {
 		j = ln
-	} else {
-		j = MinInt(ln, AbsInt(i+j))
+	} else if j < 0 {
+		j = MinInt(ln, i-j)
 	}
-	return &TA{v: ta.v[i:j:j]}
+
+	if ta.idx == nil {
+		return &TA{v: ta.v[i:j:j]}
+	}
+
+	out := make([]Decimal, 0, j-i)
+	for ; i < j; i++ {
+		out = append(out, ta.Get(i))
+	}
+
+	return &TA{v: out}
 }
 
 func (ta *TA) Last() Decimal {
 	if ln := ta.Len(); ln > 0 {
-		return ta.At(ln - 1)
+		return ta.Get(ln - 1)
 	}
 	return 0
 }
@@ -159,31 +191,44 @@ func (ta *TA) Len() int {
 	if ta == nil {
 		return 0
 	}
-	return len(ta.v)
+	return cap(ta.v)
 }
 
-// Floats returns the taice as []float64, without a copy
+// Floats returns the taice as []float64, without a copy if not capped
+// if ta is capped, it'll create a copy
 func (ta *TA) Floats() []float64 {
-	// this must be changed if decimal != float64
+	if ta.idx == nil {
+		// this must be changed if decimal != float64
+		return *(*[]float64)(unsafe.Pointer(&ta.v))
+	}
+
+	out := make([]float64, 0, ta.Len())
+	for i := 0; i < ta.Len(); i++ {
+		out = append(out, ta.Get(i).Float())
+	}
+	return out
+}
+
+func (ta *TA) floats() []float64 {
 	return *(*[]float64)(unsafe.Pointer(&ta.v))
 }
 
+func (ta *TA) Uncapped() *TA {
+	if ta.idx == nil {
+		return ta.Copy()
+	}
+	fs := ta.Floats()
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&fs))}
+}
+
 // Raw returns the underlying data slice
-// if ta is capped, the data wil *not* be in order
+// if ta is capped, the data will *not* be in order
 func (ta *TA) Raw() []Decimal {
 	return ta.v
 }
 
 func (ta *TA) Copy() *TA {
-	return &TA{v: append([]Decimal(nil), ta.v...)}
-}
-
-func (ta *TA) At(i int) Decimal {
-	return ta.v[ta.index(i)]
-}
-
-func (ta *TA) SetAt(i int, v Decimal) {
-	ta.v[ta.index(i)] = v
+	return &TA{v: append([]Decimal(nil), ta.v...), idx: ta.idx}
 }
 
 func (ta *TA) Equal(o *TA) bool {
@@ -192,7 +237,7 @@ func (ta *TA) Equal(o *TA) bool {
 	}
 
 	for i := 0; i < ta.Len(); i++ {
-		if ta.At(i).NotEqual(o.At(i)) {
+		if ta.Get(i).NotEqual(o.Get(i)) {
 			return false
 		}
 	}
@@ -240,7 +285,7 @@ func (ta *TA) Crossover(o *TA) bool {
 		panic("o.Len() < 3")
 	}
 
-	return ta.At(-2) <= o.At(-2) && ta.At(-1) > o.At(-1)
+	return ta.Get(-2) <= o.Get(-2) && ta.Get(-1) > o.Get(-1)
 }
 
 func (ta *TA) Crossunder(o *TA) bool {
@@ -249,7 +294,7 @@ func (ta *TA) Crossunder(o *TA) bool {
 		panic("o.Len() < 3")
 	}
 
-	return ta.At(-1) <= o.At(-1) && ta.At(-2) > o.At(-2)
+	return ta.Get(-1) <= o.Get(-1) && ta.Get(-2) > o.Get(-2)
 }
 
 func (ta *TA) Fill(start, length int, v Decimal) *TA {
@@ -276,26 +321,24 @@ func (ta *TA) GroupBy(fn func(idx int, v Decimal) (group bool), aggFn func(*TA) 
 		fs   = ta.v[:0]
 		last int
 		ln   = ta.Len()
-		vs   = ta.v
-		out  = ta
+		out  *TA
 	)
 
 	if !inPlace {
 		fs = []Decimal{}
-		out = &TA{}
 	}
 
 	for i, last := 0, 0; i < ln; i++ {
-		v := vs[i]
+		v := ta.Get(i)
 		if fn(i, v) {
-			out.v = vs[last : i+1]
+			out = ta.Slice(last, i+1)
 			fs = append(fs, aggFn(out))
 			last = i + 1
 		}
 	}
 
 	if last < ln {
-		out.v = vs[last:]
+		out = ta.Slice(last, 0)
 		fs = append(fs, aggFn(out))
 	}
 
@@ -307,27 +350,27 @@ func (ta *TA) SplitFn(fn func(idx int, v Decimal) (split bool), copy bool) []*TA
 	var (
 		ln   = len(ta.v)
 		out  []*TA
-		tmp  []Decimal
 		last int
-		vs   = ta.v
 	)
 
 	for i := 0; i < ln; i++ {
-		v := vs[i]
+		v := ta.Get(i)
 		if fn(i, v) {
-			if tmp = vs[last : i+1]; copy {
-				tmp = append([]Decimal(nil), tmp...)
+			tmp := ta.Slice(last, i+1)
+			if copy && ta.idx == nil {
+				tmp = tmp.Copy()
 			}
 			last = i + 1
-			out = append(out, &TA{v: tmp})
+			out = append(out, tmp)
 		}
 	}
 
 	if last < ln {
-		if tmp = vs[last:]; copy {
-			tmp = append([]Decimal(nil), tmp...)
+		tmp := ta.Slice(last, 0)
+		if copy && ta.idx == nil {
+			tmp = tmp.Copy()
 		}
-		out = append(out, &TA{v: tmp})
+		out = append(out, tmp)
 	}
 
 	return out[:len(out):len(out)]
@@ -341,12 +384,40 @@ func (ta *TA) Split(segSize int, copy bool) []*TA {
 }
 
 func (ta *TA) Sum() Decimal {
-	s := floats.Sum(ta.Floats())
+	s := floats.Sum(ta.floats())
 	return Decimal(s)
 }
 
+// CumSum finds the cumulative sum of the ta
+func (ta *TA) CumSum() *TA {
+	dst := floats.CumSum(make([]float64, ta.Len()), ta.Floats())
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&dst))}
+}
+
+// CumProd finds the cumulative product of the ta
+func (ta *TA) CumProd() *TA {
+	dst := floats.CumProd(make([]float64, ta.Len()), ta.Floats())
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&dst))}
+}
+
+func (ta *TA) Product() Decimal {
+	return Decimal(floats.Prod(ta.Floats()))
+}
+
 func (ta *TA) Avg() Decimal {
-	return ta.Sum().Div(Decimal(float64(len(ta.v))))
+	return ta.Sum() / Decimal(len(ta.v))
+}
+
+func (ta *TA) Dot(o *TA) Decimal {
+	return Decimal(floats.Dot(ta.Floats(), o.Floats()))
+}
+
+func (ta *TA) StdDevSum() Decimal {
+	return Decimal(stat.StdDev(ta.Floats(), nil))
+}
+
+func (ta *TA) VarianceSum() Decimal {
+	return Decimal(stat.Variance(ta.Floats(), nil))
 }
 
 func (ta *TA) Format(f fmt.State, c rune) {
@@ -368,7 +439,7 @@ func (ta *TA) Format(f fmt.State, c rune) {
 	}
 
 	if hasPlus {
-		io.WriteString(f, "&TA{")
+		io.WriteString(f, "&TA{data: [")
 	} else {
 		io.WriteString(f, "[")
 	}
@@ -377,7 +448,7 @@ func (ta *TA) Format(f fmt.State, c rune) {
 		if i > 0 {
 			io.WriteString(f, ", ")
 		}
-		v := ta.At(i).Text(byte(c), prec)
+		v := ta.Get(i).Text(byte(c), prec)
 		if w := wid - len(v); w > 0 {
 			if hasZero {
 				io.WriteString(f, strings.Repeat("0", w))
@@ -387,7 +458,12 @@ func (ta *TA) Format(f fmt.State, c rune) {
 		}
 		io.WriteString(f, v)
 	}
+
 	if hasPlus {
+		io.WriteString(f, "]")
+		if ta.idx != nil {
+			io.WriteString(f, ", capped: true")
+		}
 		io.WriteString(f, "}")
 	} else {
 		io.WriteString(f, "]")

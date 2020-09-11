@@ -71,7 +71,7 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 	}
 
 	for i := 0; i < res.Len(); i++ {
-		gr, pr := res.At(i), pyres.At(i)
+		gr, pr := res.Get(i), pyres.Get(i)
 		if gr.IsNaN() {
 			gr = 0.0
 		}
@@ -79,8 +79,8 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 		if !decimal.EqualApprox(gr.Float(), pr.Float(), 1e-6) {
 			t.Fatalf("[@%d] got %#v, expected %#v (diff %.20f)\ngo: %v\npy: %v",
 				i, gr, pr, gr.Sub(pr).Abs(),
-				res.Slice(MaxInt(0, i-4), MinInt(res.Len(), i+4)),
-				pyres.Slice(MaxInt(0, i-4), MinInt(pyres.Len(), i+4)))
+				res.v[MaxInt(0, i-4):MinInt(res.Len(), i+4)],
+				pyres.v[MaxInt(0, i-4):MinInt(pyres.Len(), i+4)])
 		}
 	}
 }
@@ -96,53 +96,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSMA(t *testing.T) {
-	testMA(t, "SMA", SMA, 120)
-}
-
-func BenchmarkSMA(b *testing.B) {
-	benchMA(b, "SMA", 10, SMA)
-}
-
-func TestEMA(t *testing.T) {
-	testMA(t, "EMA", EMA, -1)
-}
-
-func BenchmarkEMA(b *testing.B) {
-	benchMA(b, "EMA", 10, EMA)
-}
-
-func TestWMA(t *testing.T) {
-	testMA(t, "WMA", WMA, -1)
-}
-
-func BenchmarkWMA(b *testing.B) {
-	benchMA(b, "WMA", 10, WMA)
-}
-
-func TestDEMA(t *testing.T) {
-	testMA(t, "DEMA", DEMA, 36)
-}
-
-func BenchmarkDEMA(b *testing.B) {
-	benchMA(b, "DEMA", 10, DEMA)
-}
-
-func TestTEMA(t *testing.T) {
-	testMA(t, "TEMA", TEMA, 32)
-}
-
-func BenchmarkTEMA(b *testing.B) {
-	benchMA(b, "TEMA", 10, TEMA)
-}
-
-func TestRSI(t *testing.T) {
-	testMA(t, "RSI", RSI, 120)
-}
-
-func BenchmarkRSI(b *testing.B) {
-	benchMA(b, "RSI", 10, RSI)
-}
+func TestSMA(t *testing.T)  { testMA(t, "SMA", SMA, 120) }
+func TestEMA(t *testing.T)  { testMA(t, "EMA", EMA, -1) }
+func TestWMA(t *testing.T)  { testMA(t, "WMA", WMA, -1) }
+func TestDEMA(t *testing.T) { testMA(t, "DEMA", DEMA, 36) }
+func TestTEMA(t *testing.T) { testMA(t, "TEMA", TEMA, 32) }
+func TestRSI(t *testing.T)  { testStudy(t, "RSI", RSI, 120) }
 
 func TestMACD(t *testing.T) {
 	t.Parallel()
@@ -156,9 +115,41 @@ func TestMACD(t *testing.T) {
 	}
 }
 
+func TestVar(t *testing.T)    { testStudy(t, "VAR", Variance, 120) }
+func TestStdDev(t *testing.T) { testStudy(t, "STDDEV", StdDev, 120) }
+
+func TestVWAP(t *testing.T) {
+	data := [][2]Decimal{
+		{2.5, 268},
+		{7.5, 269},
+	}
+
+	vwap := VWAP(2)
+
+	var last Decimal
+	for _, d := range data {
+		vw := vwap.Update(d[0], d[1])
+		// t.Log(d[0], d[1], vw)
+		last = vw[0]
+	}
+
+	if last != 268.75 {
+		t.Fatalf("expected 268.75, got %v", last)
+	}
+
+	vwap = VWAP(2)
+
+	vol := NewSize(2, true).Append(2.5, 7.5)
+	prices := NewSize(2, true).Append(268, 269)
+	t.Log(vwap.Setup(vol, prices))
+	if last = vwap.Setup(vol, prices)[0].Last(); last != 268.75 {
+		t.Fatalf("expected 268.75, got %v", last)
+	}
+}
+
 func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ string) {
 	t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, fast, slow, sig), func(t *testing.T) {
-		macd, macdsignal, macdhist, _ := testClose.MACDExt(fn(fast), fn(slow), fn(sig))
+		macd, macdsignal, macdhist, _ := testClose.MACDMulti(fn(fast), fn(slow), fn(sig))
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
 		compare(t, macd, "result, macdsignal, macdhist = %s", pyfn)
@@ -189,19 +180,16 @@ func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
 	}
 }
 
-func benchMA(b *testing.B, name string, step int, fn MovingAverageFunc) {
-	b.Helper()
-	b.RunParallel(func(pb *testing.PB) {
-		var sink interface{}
-		for pb.Next() {
-			sink, _ = testClose.MovingAverage(fn, step)
+func testStudy(t *testing.T, name string, fn func(period int) Study, maxPeriod int) {
+	t.Parallel()
+	for _, period := range maSteps {
+		if maxPeriod > -1 && period > maxPeriod {
+			t.Skipf("%s > %d overflows python", name, maxPeriod)
 		}
-		_ = sink
-	})
-}
-
-func TestBlah(t *testing.T) {
-	N := 9
-	res, _, _, _ := testClose.MACD(12, 26, N)
-	compare(t, res.Slice(-5, 0), "result, _, _ = talib.%s(testClose, %v)", "MACD", "12, 26, 9")
+		t.Run(strconv.Itoa(period), func(t *testing.T) {
+			st := fn(period)
+			res := st.Setup(testClose)
+			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
+		})
+	}
 }

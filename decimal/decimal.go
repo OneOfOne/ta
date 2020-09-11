@@ -130,9 +130,16 @@ func (d Decimal) Round(unit Decimal) Decimal {
 }
 
 // Pow uses shopspring/decimal if n < 10, otherwise a simple loop
-func (d Decimal) Pow(n int) Decimal {
+func (d Decimal) Pow(n Decimal) Decimal {
 	v := math.Pow(float64(d), float64(n))
 	return Decimal(v)
+}
+
+func (d Decimal) PercentOf(v Decimal) (value, plus, minus Decimal) {
+	value = d * v
+	plus = d + value
+	minus = d - value
+	return
 }
 
 func (d Decimal) Cmp(x Decimal) int {
@@ -241,6 +248,9 @@ func (d Decimal) Text(fmt byte, prec int) string {
 }
 
 func EqualApprox(a, b, epsilon float64) bool {
+	if epsilon == 0 {
+		epsilon = Epsilon
+	}
 	return scalar.EqualWithinAbsOrRel(a, b, epsilon, epsilon)
 }
 
@@ -295,4 +305,17 @@ func Crosover(curr, prev, mark Decimal) bool {
 
 func Crossunder(curr, prev, mark Decimal) bool {
 	return curr <= mark && prev > mark
+}
+
+func SliceEqual(a, b []Decimal) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, av := range a {
+		if av.NotEqual(b[i]) {
+			return false
+		}
+	}
+
+	return true
 }

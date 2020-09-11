@@ -21,7 +21,7 @@ func Average(tas ...*TA) *TA {
 		var v Decimal
 		for _, ta := range tas {
 			if i < ta.Len() {
-				v = v.Add(ta.At(i))
+				v = v.Add(ta.Get(i))
 			}
 		}
 		out.Append(v / Decimal(ln))
