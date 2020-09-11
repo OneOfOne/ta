@@ -1,4 +1,4 @@
-on: [push, pull_request]
+on: [push, release, pull_request]
 name: testing
 jobs:
   test:
@@ -12,7 +12,7 @@ jobs:
 
     - uses: goanpeca/setup-miniconda@v1
       with:
-        auto-update-conda: true
+        auto-update-conda: false
         python-version: 3.5
         activate-environment: ta
 
@@ -48,3 +48,9 @@ jobs:
         - uses: shogo82148/actions-goveralls@v1
           with:
             parallel-finished: true
+        - name: Install Python Deps
+          shell: bash -l {0}
+          run: |
+            cd $(mktemp -d)
+            go mod init tmp
+            env GOPROXY=https://proxy.golang.org GO111MODULE=on go get go.oneofone.dev/ta@master
