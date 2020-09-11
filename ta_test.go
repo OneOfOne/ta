@@ -96,27 +96,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSMA(t *testing.T) { testMA(t, "SMA", SMA, 120) }
-
-func BenchmarkSMA(b *testing.B) { benchMA(b, "SMA", 10, SMA) }
-
-func TestEMA(t *testing.T) { testMA(t, "EMA", EMA, -1) }
-
-func BenchmarkEMA(b *testing.B) { benchMA(b, "EMA", 10, EMA) }
-
-func TestWMA(t *testing.T) { testMA(t, "WMA", WMA, -1) }
-
-func BenchmarkWMA(b *testing.B) { benchMA(b, "WMA", 10, WMA) }
-
+func TestSMA(t *testing.T)  { testMA(t, "SMA", SMA, 120) }
+func TestEMA(t *testing.T)  { testMA(t, "EMA", EMA, -1) }
+func TestWMA(t *testing.T)  { testMA(t, "WMA", WMA, -1) }
 func TestDEMA(t *testing.T) { testMA(t, "DEMA", DEMA, 36) }
-
-func BenchmarkDEMA(b *testing.B) { benchMA(b, "DEMA", 10, DEMA) }
-
 func TestTEMA(t *testing.T) { testMA(t, "TEMA", TEMA, 32) }
-
-func BenchmarkTEMA(b *testing.B) { benchMA(b, "TEMA", 10, TEMA) }
-
-func TestRSI(t *testing.T) { testStudy(t, "RSI", RSI, 120) }
+func TestRSI(t *testing.T)  { testStudy(t, "RSI", RSI, 120) }
 
 func TestMACD(t *testing.T) {
 	t.Parallel()
@@ -130,11 +115,13 @@ func TestMACD(t *testing.T) {
 	}
 }
 
+func TestVar(t *testing.T)    { testStudy(t, "VAR", Variance, 120) }
+func TestStdDev(t *testing.T) { testStudy(t, "STDDEV", StdDev, 120) }
+
 func TestVWAP(t *testing.T) {
 	data := [][2]Decimal{
 		{2.5, 268},
 		{7.5, 269},
-		//{8.5, 269.5},
 	}
 
 	vwap := VWAP(2)
@@ -201,25 +188,8 @@ func testStudy(t *testing.T, name string, fn func(period int) Study, maxPeriod i
 		}
 		t.Run(strconv.Itoa(period), func(t *testing.T) {
 			st := fn(period)
-			res := testClose.Map(st.Update, false).Slice(-st.Len(), 0)
+			res := st.Setup(testClose)
 			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}
-}
-
-func benchMA(b *testing.B, name string, step int, fn MovingAverageFunc) {
-	b.Helper()
-	b.RunParallel(func(pb *testing.PB) {
-		var sink interface{}
-		for pb.Next() {
-			sink, _ = testClose.MovingAverage(fn, step)
-		}
-		_ = sink
-	})
-}
-
-func TestBlah(t *testing.T) {
-	N := 9
-	res, _, _, _ := testClose.MACD(12, 26, N)
-	compare(t, res.Slice(-5, 0), "result, _, _ = talib.%s(testClose, %v)", "MACD", "12, 26, 9")
 }

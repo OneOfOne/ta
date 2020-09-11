@@ -1,4 +1,4 @@
-package ta
+package ta // import "go.oneofone.dev/ta"
 
 import (
 	"fmt"
@@ -201,6 +201,7 @@ func (ta *TA) Floats() []float64 {
 		// this must be changed if decimal != float64
 		return *(*[]float64)(unsafe.Pointer(&ta.v))
 	}
+
 	out := make([]float64, 0, ta.Len())
 	for i := 0; i < ta.Len(); i++ {
 		out = append(out, ta.Get(i).Float())
@@ -208,8 +209,20 @@ func (ta *TA) Floats() []float64 {
 	return out
 }
 
+func (ta *TA) floats() []float64 {
+	return *(*[]float64)(unsafe.Pointer(&ta.v))
+}
+
+func (ta *TA) Uncapped() *TA {
+	if ta.idx == nil {
+		return ta.Copy()
+	}
+	fs := ta.Floats()
+	return &TA{v: *(*[]Decimal)(unsafe.Pointer(&fs))}
+}
+
 // Raw returns the underlying data slice
-// if ta is capped, the data wil *not* be in order
+// if ta is capped, the data will *not* be in order
 func (ta *TA) Raw() []Decimal {
 	return ta.v
 }
@@ -371,7 +384,7 @@ func (ta *TA) Split(segSize int, copy bool) []*TA {
 }
 
 func (ta *TA) Sum() Decimal {
-	s := floats.Sum(ta.Floats())
+	s := floats.Sum(ta.floats())
 	return Decimal(s)
 }
 
@@ -392,18 +405,18 @@ func (ta *TA) Product() Decimal {
 }
 
 func (ta *TA) Avg() Decimal {
-	return ta.Sum().Div(Decimal(float64(len(ta.v))))
+	return ta.Sum() / Decimal(len(ta.v))
 }
 
 func (ta *TA) Dot(o *TA) Decimal {
 	return Decimal(floats.Dot(ta.Floats(), o.Floats()))
 }
 
-func (ta *TA) StdDev() Decimal {
+func (ta *TA) StdDevSum() Decimal {
 	return Decimal(stat.StdDev(ta.Floats(), nil))
 }
 
-func (ta *TA) Variance() Decimal {
+func (ta *TA) VarianceSum() Decimal {
 	return Decimal(stat.Variance(ta.Floats(), nil))
 }
 

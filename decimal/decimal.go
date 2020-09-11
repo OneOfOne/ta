@@ -130,7 +130,7 @@ func (d Decimal) Round(unit Decimal) Decimal {
 }
 
 // Pow uses shopspring/decimal if n < 10, otherwise a simple loop
-func (d Decimal) Pow(n int) Decimal {
+func (d Decimal) Pow(n Decimal) Decimal {
 	v := math.Pow(float64(d), float64(n))
 	return Decimal(v)
 }
@@ -248,6 +248,9 @@ func (d Decimal) Text(fmt byte, prec int) string {
 }
 
 func EqualApprox(a, b, epsilon float64) bool {
+	if epsilon == 0 {
+		epsilon = Epsilon
+	}
 	return scalar.EqualWithinAbsOrRel(a, b, epsilon, epsilon)
 }
 

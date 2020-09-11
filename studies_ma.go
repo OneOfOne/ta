@@ -1,4 +1,4 @@
-package ta // import "go.oneofone.dev/ta"
+package ta
 
 type MovingAverage interface {
 	Setup(d *TA) *TA
