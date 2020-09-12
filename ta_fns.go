@@ -30,29 +30,6 @@ func Average(tas ...*TA) *TA {
 	return out
 }
 
-// FloatsTMAma - Triangular Moving Average
-// func FloatsTriMA(data []float64, period int) []float64 {
-// 	return FromFloats(data).Trima(period).Floats()
-// }
-
-// // Kama - Kaufman Adaptive Moving Average
-// func Kama(data []float64, period int) []float64 {
-// 	return FromFloats(data).Kama(period).Floats()
-// }
-
-// // Mama - MESA Adaptive Moving Average (lookback=32)
-// func Mama(data []float64, fastLimit, slowLimit float64) ([]float64, []float64) {
-// 	m, f := FromFloats(data).Mama(32, fastLimit, slowLimit)
-// 	return m.Floats(), f.Floats()
-// }
-
-// // T3 - Triple Exponential Moving Average (T3) (lookback=6*period)
-// func T3(data []float64, period int, vfactor float64) []float64 {
-// 	return FromFloats(data).T3(period, 6, vfactor).Floats()
-// }
-
-/* Math Transform Functions */
-
 // Acos - Vector Trigonometric ACOS
 func (ta *TA) Acos() *TA {
 	return ta.Mapf(math.Acos, false)

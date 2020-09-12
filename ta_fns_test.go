@@ -9,17 +9,6 @@ import (
 	"go.oneofone.dev/ta/decimal"
 )
 
-func randSlice(size int, seed int64, min, max Decimal) *TA {
-	r := rand.New(rand.NewSource(seed))
-	out := NewSize(size, true)
-	for i := 0; i < size; i++ {
-		v := decimal.RandRange(r, min, max)
-		out.Append(v)
-	}
-
-	return out
-}
-
 func TestTA(t *testing.T) {
 	r := rand.New(rand.NewSource(42))
 	ta := New(make([]float64, 100), func(float64) float64 { return r.Float64() })
@@ -96,13 +85,6 @@ func TestCapped(t *testing.T) {
 				t.Fatal(i, j, x, v, i/5, exp, s.v)
 			}
 		}
-		// m1 := int(s.At((4 - 1)))
-		// m2 := int(s.At((3 - 1)))
-		// m3 := int(s.At((2 - 1)))
-		// if m1 != i || m2 != i-1 || m3 != i-2 || int(s.At(0)) != i-3 {
-		// 	t.Log(*s.idx)
-		// 	t.Fatalf("expected (%d, %d, %d, %d), got (%v, %v, %v, %v) (%v) ", i, i-1, i-2, i-3, m1, m2, m3, s.At(0), s.v)
-		// }
 	}
 	if !s.Equal(exp) {
 		t.Fatal("s != exp", s, s.v, exp, exp.v)
@@ -136,11 +118,10 @@ func TestCapped(t *testing.T) {
 
 func TestMathFuncs(t *testing.T) {
 	t.Parallel()
-	type fnTest struct {
+	tests := &[...]struct {
 		name string
 		fn   func(*TA) *TA
-	}
-	for _, fn := range &[...]fnTest{
+	}{
 		{"Acos", (*TA).Acos},
 		{"Asin", (*TA).Asin},
 		{"Atan", (*TA).Atan},
@@ -156,7 +137,9 @@ func TestMathFuncs(t *testing.T) {
 		{"Sqrt", (*TA).Sqrt},
 		{"Tan", (*TA).Tan},
 		{"Tanh", (*TA).Tanh},
-	} {
+	}
+
+	for _, fn := range tests {
 		t.Run(fn.name, func(t *testing.T) {
 			res := fn.fn(testRand)
 			compare(t, res, "result = talib.%s(testRand)", strings.ToUpper(fn.name))
@@ -181,10 +164,6 @@ func TestMathOps(t *testing.T) {
 			compare(t, res, "result = talib.%s(testHigh, testLow)", strings.ToUpper(fn.name))
 		})
 	}
-
-	a := New([]float64{3, 4, 5, 6})
-	b := New([]float64{2, 2, 2, 2})
-	t.Log(a.Mul(b))
 }
 
 func TestCrossOverUnder(t *testing.T) {
@@ -193,7 +172,7 @@ func TestCrossOverUnder(t *testing.T) {
 		t.Error("Crossover: not expected and found")
 	}
 
-	if testNothingCrossed1.Crossover(testNothingCrossed2) == true {
+	if testNothingCrossed1.Crossover(testNothingCrossed2) {
 		t.Error("Crossover: not expected and found")
 	}
 

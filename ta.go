@@ -188,10 +188,16 @@ func (ta *TA) Last() Decimal {
 }
 
 func (ta *TA) Len() int {
-	if ta == nil {
-		return 0
-	}
+	return len(ta.v)
+}
+
+func (ta *TA) Cap() int {
 	return cap(ta.v)
+}
+
+func (ta *TA) Trunc(idx int) *TA {
+	ta.v = ta.v[:idx]
+	return ta
 }
 
 // Floats returns the taice as []float64, without a copy if not capped
@@ -318,14 +324,14 @@ func (ta *TA) GroupBy(fn func(idx int, v Decimal) (group bool), aggFn func(*TA) 
 	}
 
 	var (
-		fs   = ta.v[:0]
+		fs   []Decimal
 		last int
 		ln   = ta.Len()
 		out  *TA
 	)
 
-	if !inPlace {
-		fs = []Decimal{}
+	if inPlace && ta.idx == nil {
+		fs = ta.v[:0]
 	}
 
 	for i, last := 0, 0; i < ln; i++ {
@@ -344,6 +350,11 @@ func (ta *TA) GroupBy(fn func(idx int, v Decimal) (group bool), aggFn func(*TA) 
 
 	out.v = fs[:len(fs):len(fs)]
 	return out
+}
+
+func (ta *TA) Agg(period int, inPlace bool) *TA {
+	mark := period - 1
+	return ta.GroupBy(func(i int, _ Decimal) bool { return i%period == mark }, (*TA).Avg, inPlace)
 }
 
 func (ta *TA) SplitFn(fn func(idx int, v Decimal) (split bool), copy bool) []*TA {

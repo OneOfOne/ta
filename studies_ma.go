@@ -1,13 +1,13 @@
 package ta
 
 type MovingAverage interface {
-	Setup(d *TA) *TA
-	Update(v Decimal) Decimal
-	Len() int
+	Study
 	ma()
 }
 
-type implMA struct{}
+type implMA struct {
+	noMulti
+}
 
 func (implMA) ma() {}
 
@@ -16,12 +16,8 @@ type MovingAverageFunc func(period int) MovingAverage
 
 func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, MovingAverage) {
 	ma := fn(period)
-	return ma.Setup(ta), ma
-}
-
-// SMA - Simple Moving Average
-func (ta *TA) SMA(period int) (*TA, MovingAverage) {
-	return ta.MovingAverage(SMA, period)
+	ta = ApplyStudy(ma, ta)
+	return ta, ma
 }
 
 // SMA - Simple Moving Average
@@ -33,6 +29,8 @@ func SMA(period int) MovingAverage {
 	}
 }
 
+var _ Study = (*sma)(nil)
+
 type sma struct {
 	implMA
 	data   *TA
@@ -42,26 +40,19 @@ type sma struct {
 	count  int
 }
 
-func (l *sma) Setup(d *TA) *TA {
-	return d.Map(l.Update, false).Slice(-l.period, 0)
-}
+func (l *sma) Update(vs ...Decimal) Decimal {
+	for _, v := range vs {
+		prev := l.data.Update(v)
+		if l.count < l.period {
+			l.count++
+		}
 
-func (l *sma) Update(v Decimal) Decimal {
-	prev := l.data.Update(v)
-	if l.count < l.period {
-		l.count++
+		l.sum = l.sum - prev + v
 	}
-
-	l.sum = l.sum - prev + v
 	return l.sum / Decimal(l.count)
 }
 
 func (l *sma) Len() int { return l.period }
-
-// EMA - Exponential Moving Average
-func (ta *TA) EMA(period int) (*TA, MovingAverage) {
-	return ta.MovingAverage(EMA, period)
-}
 
 // EMA - Exponential Moving Average
 // An alias for CustomEMA(period, 2 / (period+1))
@@ -81,6 +72,8 @@ func CustomEMA(period int, k Decimal) MovingAverage {
 	}
 }
 
+var _ Study = (*ema)(nil)
+
 type ema struct {
 	implMA
 	k      Decimal
@@ -93,20 +86,22 @@ type ema struct {
 func (l *ema) Setup(d *TA) *TA {
 	l.set = true
 	l.prevMA = d.Slice(0, l.period).Avg()
-	d = d.Slice(l.period, 0).Map(l.Update, false)
+	d = d.Slice(l.period, 0).Map(func(d Decimal) Decimal { return l.Update(d) }, false)
 	return d
 }
 
-func (l *ema) Update(v Decimal) Decimal {
-	if l.set {
-		l.prevMA = v.Sub(l.prevMA).Mul(l.k).Add(l.prevMA)
-		return l.prevMA
-	}
+func (l *ema) Update(vs ...Decimal) Decimal {
+	for _, v := range vs {
+		if l.set {
+			l.prevMA = v.Sub(l.prevMA).Mul(l.k).Add(l.prevMA)
+			return l.prevMA
+		}
 
-	l.prevMA += v
-	if l.idx++; l.idx == l.period {
-		l.set = true
-		l.prevMA = l.prevMA / Decimal(l.period)
+		l.prevMA += v
+		if l.idx++; l.idx == l.period {
+			l.set = true
+			l.prevMA = l.prevMA / Decimal(l.period)
+		}
 	}
 	return l.prevMA
 }
@@ -115,11 +110,6 @@ func (l *ema) Len() int { return l.period }
 
 func (l *ema) copy() ema {
 	return *l
-}
-
-// WMA - Exponential Moving Average
-func (ta *TA) WMA(period int) (*TA, MovingAverage) {
-	return ta.MovingAverage(WMA, period)
 }
 
 // WMA - Exponential Moving Average
@@ -138,6 +128,8 @@ func CustomWMA(period int, weight Decimal) MovingAverage {
 		period: period,
 	}
 }
+
+var _ Study = (*wma)(nil)
 
 type wma struct {
 	implMA
@@ -161,115 +153,123 @@ func (l *wma) Setup(d *TA) *TA {
 	}
 	l.sum, l.weightedSum = sum, wsum
 	l.idx = l.period - 2
-	d = d.Slice(l.period-1, 0).Map(l.Update, false)
+	d = d.Slice(l.period-1, 0).Map(func(d Decimal) Decimal { return l.Update(d) }, false)
 	return d
 }
 
-func (l *wma) Update(v Decimal) Decimal {
-	if !l.set {
-		l.data.Set(l.idx, v)
-		if l.idx < l.period-1 {
-			l.idx++
-			l.weightedSum += v * Decimal(l.idx)
-			l.sum += v
-			return l.weightedSum / (l.weight * Decimal(l.idx))
+func (l *wma) Update(vs ...Decimal) (rv Decimal) {
+	for _, v := range vs {
+		if !l.set {
+			l.data.Set(l.idx, v)
+			if l.idx < l.period-1 {
+				l.idx++
+				l.weightedSum += v * Decimal(l.idx)
+				l.sum += v
+				return l.weightedSum / (l.weight * Decimal(l.idx))
+			}
+			l.idx = l.period - 2
+			l.set = true
 		}
-		l.idx = l.period - 2
-		l.set = true
-	}
-	l.idx = (l.idx + 1) % l.period
-	l.data.Set(l.idx, v)
-	l.weightedSum += v * Decimal(l.period)
-	l.sum += v
-	rv := l.weightedSum / l.weight
-	l.weightedSum -= l.sum
+		l.idx = (l.idx + 1) % l.period
+		l.data.Set(l.idx, v)
+		l.weightedSum += v * Decimal(l.period)
+		l.sum += v
+		rv = l.weightedSum / l.weight
+		l.weightedSum -= l.sum
 
-	pidx := (l.idx + 1) % l.period
-	l.sum -= l.data.Get(pidx)
+		pidx := (l.idx + 1) % l.period
+		l.sum -= l.data.Get(pidx)
+	}
 	return rv
 }
 
 func (l *wma) Len() int { return l.period }
 
 // DEMA - Double Exponential Moving Average
-func (ta *TA) DEMA(period int) (*TA, MovingAverage) {
-	return ta.MovingAverage(DEMA, period)
+func DEMA(period int) MovingAverage {
+	return DoubleMA(period, EMA)
 }
 
-// DEMA - Double Exponential Moving Average
-func DEMA(period int) MovingAverage {
+// DoubleMA - Double Moving Average
+func DoubleMA(period int, ma MovingAverageFunc) MovingAverage {
 	checkPeriod(period, 2)
-	e1 := EMA(period).(*ema)
-	return &dema{
-		e1:     *e1,
-		period: period,
+	return &dxma{
+		e1: ma(period),
+		e2: ma(period),
 	}
 }
 
-type dema struct {
+var _ Study = (*dxma)(nil)
+
+type dxma struct {
 	implMA
-	e1, e2 ema
-	period int
+	e1, e2 Study
 	idx    int
 }
 
-func (l *dema) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
-
-func (l *dema) Update(v Decimal) Decimal {
-	e1 := l.e1.Update(v)
-	if l.idx < l.period {
-		if l.idx++; l.idx == l.period {
-			l.e2 = l.e1.copy()
+func (l *dxma) Update(vs ...Decimal) Decimal {
+	period := l.Len()
+	var e1, e2 Decimal
+	for _, v := range vs {
+		e1 = l.e1.Update(v)
+		if l.idx < period {
+			e2 = l.e2.Update(v)
+			l.idx++
+			continue
 		}
-		return v
+		e2 = l.e2.Update(e1)
 	}
-	e2 := l.e2.Update(e1)
 	return e1*2 - e2
 }
 
-func (l *dema) Len() int { return l.period }
-
-// TEMA - Triple Exponential Moving Average
-func (ta *TA) TEMA(period int) (*TA, MovingAverage) {
-	return ta.MovingAverage(TEMA, period)
-}
+func (l *dxma) Len() int { return l.e1.Len() }
 
 // TEMA - Triple Exponential Moving Average
 func TEMA(period int) MovingAverage {
+	return TripleMA(period, EMA)
+}
+
+// TripleMA - Triple Moving Average
+func TripleMA(period int, ma MovingAverageFunc) MovingAverage {
 	checkPeriod(period, 2)
-	e1 := EMA(period).(*ema)
-	return &tema{
-		e1:     *e1,
+	return &txma{
+		e1:     ma(period),
+		e2:     ma(period),
+		e3:     ma(period),
 		period: period,
 	}
 }
 
-type tema struct {
+var _ Study = (*txma)(nil)
+
+type txma struct {
 	implMA
-	e1, e2, e3 ema
+	e1, e2, e3 Study
 	period     int
 	idx        int
 	max2       int
 	max3       int
 }
 
-func (l *tema) Setup(d *TA) *TA { return d.Map(l.Update, false).Slice(-l.period, 0) }
+func (l *txma) Update(vs ...Decimal) Decimal {
+	var e1, e2, e3 Decimal
 
-func (l *tema) Update(v Decimal) Decimal {
-	e1 := l.e1.Update(v)
-	if l.idx < l.period {
-		if l.idx++; l.idx == l.period {
-			l.e2 = l.e1.copy()
-			l.e3 = l.e1.copy()
+	for _, v := range vs {
+		e1 = l.e1.Update(v)
+		if l.idx < l.period {
+			l.idx++
+			e2 = l.e2.Update(v)
+			e3 = l.e3.Update(v)
+			continue
 		}
-		return v
+		e2 = l.e2.Update(e1)
+		e3 = l.e3.Update(e2)
 	}
-	e2 := l.e2.Update(e1)
-	e3 := l.e3.Update(e2)
+
 	return 3*e1 - 3*e2 + e3
 }
 
-func (l *tema) Len() int { return l.period }
+func (l *txma) Len() int { return l.period }
 
 // TODO:
 // - Trima

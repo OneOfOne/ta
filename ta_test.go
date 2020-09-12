@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
@@ -13,6 +14,16 @@ import (
 
 	"go.oneofone.dev/ta/decimal"
 )
+
+func TestMain(m *testing.M) {
+	log.SetFlags(log.Lshortfile)
+	pyout, _ := exec.Command("python", "-c", "import talib; print('success')").Output()
+	if string(pyout[0:7]) != "success" {
+		log.Println("python and talib must be installed to run most of the tests.")
+		noPython = true
+	}
+	os.Exit(m.Run())
+}
 
 var noPython bool
 
@@ -86,70 +97,11 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 }
 
 // Ensure that python and talib are installed and in the PATH
-func TestMain(m *testing.M) {
-	log.SetFlags(log.Lshortfile)
-	pyout, _ := exec.Command("python", "-c", "import talib; print('success')").Output()
-	if string(pyout[0:7]) != "success" {
-		log.Println("python and talib must be installed to run most of the tests.")
-		noPython = true
-	}
-	os.Exit(m.Run())
-}
-
-func TestSMA(t *testing.T)  { testMA(t, "SMA", SMA, 120) }
-func TestEMA(t *testing.T)  { testMA(t, "EMA", EMA, -1) }
-func TestWMA(t *testing.T)  { testMA(t, "WMA", WMA, -1) }
-func TestDEMA(t *testing.T) { testMA(t, "DEMA", DEMA, 36) }
-func TestTEMA(t *testing.T) { testMA(t, "TEMA", TEMA, 32) }
-func TestRSI(t *testing.T)  { testStudy(t, "RSI", RSI, 120) }
-
-func TestMACD(t *testing.T) {
-	t.Parallel()
-	tests := &[...]*[3]int{{12, 26, 9}, {6, 12, 6}, {10, 17, 12}}
-	for _, ts := range tests {
-		testMACD(t, ts[0], ts[1], ts[2], SMA, "SMA")
-		testMACD(t, ts[0], ts[1], ts[2], EMA, "EMA")
-		testMACD(t, ts[0], ts[1], ts[2], WMA, "WMA")
-		testMACD(t, ts[0], ts[1], ts[2], DEMA, "DEMA")
-		testMACD(t, ts[0], ts[1], ts[2], TEMA, "TEMA")
-	}
-}
-
-func TestVar(t *testing.T)    { testStudy(t, "VAR", Variance, 120) }
-func TestStdDev(t *testing.T) { testStudy(t, "STDDEV", StdDev, 120) }
-
-func TestVWAP(t *testing.T) {
-	data := [][2]Decimal{
-		{2.5, 268},
-		{7.5, 269},
-	}
-
-	vwap := VWAP(2)
-
-	var last Decimal
-	for _, d := range data {
-		vw := vwap.Update(d[0], d[1])
-		// t.Log(d[0], d[1], vw)
-		last = vw[0]
-	}
-
-	if last != 268.75 {
-		t.Fatalf("expected 268.75, got %v", last)
-	}
-
-	vwap = VWAP(2)
-
-	vol := NewSize(2, true).Append(2.5, 7.5)
-	prices := NewSize(2, true).Append(268, 269)
-	t.Log(vwap.Setup(vol, prices))
-	if last = vwap.Setup(vol, prices)[0].Last(); last != 268.75 {
-		t.Fatalf("expected 268.75, got %v", last)
-	}
-}
 
 func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ string) {
 	t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, fast, slow, sig), func(t *testing.T) {
-		macd, macdsignal, macdhist, _ := testClose.MACDMulti(fn(fast), fn(slow), fn(sig))
+		out := ApplyMultiStudy(MACDMulti(fn(fast), fn(slow), fn(sig)), testClose)
+		macd, macdsignal, macdhist := out[0], out[1], out[2]
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
 		compare(t, macd, "result, macdsignal, macdhist = %s", pyfn)
@@ -158,7 +110,7 @@ func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ strin
 	})
 }
 
-var maSteps = &[...]int{2, 3, 5, 10, 20, 32, 36, 39, 52, 71, 90, 120, 132, 180}
+var maSteps = &[...]int{2, 3, 5, 10, 20, 32, 36, 39, 52, 71, 90, 120}
 
 func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
 	t.Parallel()
@@ -168,13 +120,6 @@ func testMA(t *testing.T, name string, fn MovingAverageFunc, maxPeriod int) {
 		}
 		t.Run(strconv.Itoa(period), func(t *testing.T) {
 			res, _ := testClose.MovingAverage(fn, period)
-			ma := fn(period)
-			cmp := testClose.Map(ma.Update, false).Slice(-res.Len(), 0)
-			if !cmp.Equal(res) {
-				t.Log(res)
-				t.Log(cmp)
-				t.Fatal()
-			}
 			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}
@@ -187,9 +132,19 @@ func testStudy(t *testing.T, name string, fn func(period int) Study, maxPeriod i
 			t.Skipf("%s > %d overflows python", name, maxPeriod)
 		}
 		t.Run(strconv.Itoa(period), func(t *testing.T) {
-			st := fn(period)
-			res := st.Setup(testClose)
+			res := ApplyStudy(fn(period), testClose)
 			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}
+}
+
+func randSlice(size int, seed int64, min, max Decimal) *TA {
+	r := rand.New(rand.NewSource(seed))
+	out := NewSize(size, true)
+	for i := 0; i < size; i++ {
+		v := decimal.RandRange(r, min, max)
+		out.Append(v)
+	}
+
+	return out
 }
