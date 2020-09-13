@@ -16,7 +16,7 @@ type MovingAverageFunc func(period int) MovingAverage
 
 func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, MovingAverage) {
 	ma := fn(period)
-	ta = ApplyStudy(ma, ta)
+	ta = ApplyStudy(ma, ta)[0]
 	return ta, ma
 }
 

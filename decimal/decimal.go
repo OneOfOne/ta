@@ -3,6 +3,7 @@ package decimal
 import (
 	"math"
 	"math/big"
+	"math/rand"
 	"strconv"
 
 	"gonum.org/v1/gonum/floats/scalar"
@@ -70,6 +71,10 @@ func (d Decimal) Subf(x float64) Decimal {
 }
 
 func (d Decimal) Mulf(x float64) Decimal {
+	return d.Mul(Decimal(x))
+}
+
+func (d Decimal) Muli(x int) Decimal {
 	return d.Mul(Decimal(x))
 }
 
@@ -295,21 +300,32 @@ func Max(vs ...Decimal) Decimal {
 	return m
 }
 
-type RandSource = interface {
-	Int63n(int64) int64
-}
-
-func RandRange(r RandSource, min, max Decimal) (out Decimal) {
+func Rand(min, max Decimal) (r Decimal) {
 	if max < min {
 		min, max = max, min
 	}
 
 again:
-	f := float64(r.Int63n(1<<53)) / (1 << 53)
-	if f == 1 {
+	if r = Decimal(rand.Int63n(1<<53)) / (1 << 53); r == 1 {
 		goto again // resample; this branch is taken O(never)
 	}
-	return min + Decimal(f)*(max-min)
+	return min + r*(max-min)
+}
+
+type RandSource = interface {
+	Int63n(int64) int64
+}
+
+func RandWithSrc(src RandSource, min, max Decimal) (r Decimal) {
+	if max < min {
+		min, max = max, min
+	}
+
+again:
+	if r = Decimal(src.Int63n(1<<53)) / (1 << 53); r == 1 {
+		goto again // resample; this branch is taken O(never)
+	}
+	return min + r*(max-min)
 }
 
 func Crosover(curr, prev, mark Decimal) bool {

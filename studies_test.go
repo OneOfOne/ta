@@ -45,7 +45,7 @@ func TestVWAP(t *testing.T) {
 
 	vol := NewSize(2, true).Append(2.5, 7.5)
 	prices := NewSize(2, true).Append(268, 269)
-	vw := ApplyMultiStudy(vwap, vol, prices)
+	vw := ApplyStudy(vwap, vol, prices)
 	t.Log(vw)
 	if last = vw[0].Last(); last != 268.75 {
 		t.Fatalf("expected 268.75, got %v", last)

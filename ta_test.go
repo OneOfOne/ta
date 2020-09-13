@@ -100,7 +100,7 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 
 func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ string) {
 	t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, fast, slow, sig), func(t *testing.T) {
-		out := ApplyMultiStudy(MACDMulti(fn(fast), fn(slow), fn(sig)), testClose)
+		out := ApplyMultiVarStudy(MACDMulti(fn(fast), fn(slow), fn(sig)), testClose)
 		macd, macdsignal, macdhist := out[0], out[1], out[2]
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
@@ -132,7 +132,7 @@ func testStudy(t *testing.T, name string, fn func(period int) Study, maxPeriod i
 			t.Skipf("%s > %d overflows python", name, maxPeriod)
 		}
 		t.Run(strconv.Itoa(period), func(t *testing.T) {
-			res := ApplyStudy(fn(period), testClose)
+			res := ApplyStudy(fn(period), testClose)[0]
 			compare(t, res, "result = talib.%s(testClose, %d)", name, period)
 		})
 	}
@@ -142,7 +142,7 @@ func randSlice(size int, seed int64, min, max Decimal) *TA {
 	r := rand.New(rand.NewSource(seed))
 	out := NewSize(size, true)
 	for i := 0; i < size; i++ {
-		v := decimal.RandRange(r, min, max)
+		v := decimal.RandWithSrc(r, min, max)
 		out.Append(v)
 	}
 
