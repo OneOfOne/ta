@@ -10,7 +10,11 @@ import (
 
 const Epsilon = 1e-7
 
-var MarshalAsString = true
+var (
+	MarshalAsString = true
+	Inf             = Decimal(math.Inf(1))
+	NegInf          = Decimal(math.Inf(-1))
+)
 
 func Zero() Decimal {
 	return 0
@@ -94,8 +98,12 @@ func (d Decimal) IsNaN() bool {
 	return math.IsNaN(d.Float())
 }
 
-func (d Decimal) IsInf(sign int) bool {
-	return math.IsInf(d.Float(), sign)
+func (d Decimal) IsInf() bool {
+	return !d.IsNaN() && !d.IsFinate()
+}
+
+func (d Decimal) IsFinate() bool {
+	return !(d - d).IsNaN()
 }
 
 func (d Decimal) Pow2() Decimal {
@@ -104,6 +112,11 @@ func (d Decimal) Pow2() Decimal {
 
 func (d Decimal) Sqrt() Decimal {
 	v := math.Sqrt(float64(d))
+	return Decimal(v)
+}
+
+func (d Decimal) Log() Decimal {
+	v := math.Log(float64(d))
 	return Decimal(v)
 }
 

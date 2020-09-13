@@ -8,8 +8,9 @@ A Go Technical Analysis library, mostly inspired by python's [TA-Lib](https://py
 
 ## Features
 
-* Tries to be compatible with the python version for testing, however all functions support partial updates.
+* Tries to be compatible with the python version for testing, however all the functions supports partial updates to help working with live data.
 * Going for a healthy mix of speed and accuracy.
+* Includes option related functions.
 
 ## Install
 
@@ -27,6 +28,7 @@ go get -u go.oneofone.dev/ta
 * Port more functions
 * More testing / benchmarks
 * Stablize the API
+* Documentation
 
 ## Example
 
@@ -49,11 +51,15 @@ func main() {
 
 ## References
 
+Without those libraries, this wouldn't have been possible.
+
 * [mrjbq7/ta-lib](https://github.com/mrjbq7/ta-lib) (MIT?)
 * [markcheno/go-talib](https://github.com/markcheno/go-talib) (MIT)
 * [TulipCharts/tulipindicators](https://github.com/TulipCharts/tulipindicators) (LGPL v3.0)
 * [greyblake/ta-rs](https://github.com/greyblake/ta-rs) (MIT)
+* [MattL922/black-scholes](https://github.com/MattL922/black-scholes) (MIT)
+* [MattL922/implied-volatility](https://github.com/MattL922/implied-volatility) (MIT)
 
 ## License
 
-[BSD License](LICENSE)
+[BSD-3-Clause](LICENSE)
