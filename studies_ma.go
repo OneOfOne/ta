@@ -16,7 +16,7 @@ type MovingAverageFunc func(period int) MovingAverage
 
 func (ta *TA) MovingAverage(fn MovingAverageFunc, period int) (*TA, MovingAverage) {
 	ma := fn(period)
-	ta = ApplyStudy(ma, ta)[0]
+	ta = ApplyStudy(ma, ta)
 	return ta, ma
 }
 
@@ -219,6 +219,7 @@ func (l *dxma) Update(vs ...Decimal) Decimal {
 		}
 		e2 = l.e2.Update(e1)
 	}
+
 	return e1*2 - e2
 }
 

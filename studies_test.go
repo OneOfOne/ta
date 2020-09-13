@@ -2,6 +2,11 @@ package ta
 
 import "testing"
 
+func wrapMA(ma MovingAverageFunc) func(p int) Study {
+	return func(p int) Study {
+		return ma(p)
+	}
+}
 func TestSMA(t *testing.T)  { testMA(t, "SMA", SMA, -1) }
 func TestEMA(t *testing.T)  { testMA(t, "EMA", EMA, -1) }
 func TestWMA(t *testing.T)  { testMA(t, "WMA", WMA, -1) }
@@ -41,11 +46,11 @@ func TestVWAP(t *testing.T) {
 		t.Fatalf("expected 268.75, got %v", last)
 	}
 
-	vwap = VWAP(2)
+	bvwap, _ := VWAP(2).ToMulti()
 
 	vol := NewSize(2, true).Append(2.5, 7.5)
 	prices := NewSize(2, true).Append(268, 269)
-	vw := ApplyStudy(vwap, vol, prices)
+	vw := ApplyMultiVarStudy(bvwap, vol, prices)
 	t.Log(vw)
 	if last = vw[0].Last(); last != 268.75 {
 		t.Fatalf("expected 268.75, got %v", last)

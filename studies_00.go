@@ -106,41 +106,54 @@ type MultiVarStudy interface {
 }
 
 // ApplyStudy applies the given study to the input(s) and returns the result(s)
-func ApplyStudy(s Study, tas ...*TA) []*TA {
+// the returned TA.Len() == s.Len()
+func ApplyStudy(s Study, tas ...*TA) *TA {
 	if sws, ok := s.(StudyWithSetup); ok {
-		return sws.Setup(tas...)
+		return sws.Setup(tas...)[0]
 	}
-	out := make([]*TA, len(tas))
+
+	vals := make([]Decimal, len(tas))
 	ln := tas[0].Len()
-	for i := 0; i < len(tas); i++ {
-		out[i] = NewSize(ln, true)
-	}
+	sln := s.Len()
+	out := NewSize(sln, true)
+
 	for i := 0; i < ln; i++ {
 		for j := 0; j < len(tas); j++ {
-			out[j].Append(tas[j].Get(i))
+			vals[j] = tas[j].Get(i)
+		}
+		v := s.Update(vals...)
+		if ln-i <= sln {
+			out.Append(v)
 		}
 	}
+
 	return out
 }
 
 // ApplyMultiVarStudy applies the given study to input(s) and returns the result(s)
+// the returned TA[x].Len() == s.LenAll()[x]
 func ApplyMultiVarStudy(s MultiVarStudy, tas ...*TA) []*TA {
 	if sws, ok := s.(StudyWithSetup); ok {
 		return sws.Setup(tas...)
 	}
 
-	out := make([]*TA, len(tas))
+	slen := s.LenAll()
+	out := make([]*TA, len(slen))
 	vals := make([]Decimal, len(tas))
 	ln := tas[0].Len()
-	for i := 0; i < len(tas); i++ {
-		out[i] = NewSize(ln, true)
+
+	for i := 0; i < len(slen); i++ {
+		out[i] = NewSize(slen[i], true)
 	}
+
 	for i := 0; i < ln; i++ {
 		for j := 0; j < len(tas); j++ {
 			vals[j] = tas[j].Get(i)
 		}
 		for j, v := range s.UpdateAll(vals...) {
-			out[j].Append(v)
+			if ln-i <= slen[j] {
+				out[j].Append(v)
+			}
 		}
 	}
 
@@ -289,14 +302,7 @@ func (l *macd) Setup(ds ...*TA) []*TA {
 }
 
 func (l *macd) Update(vs ...Decimal) Decimal {
-	var fast, slow, macd, sig Decimal
-	for _, v := range vs {
-		fast = l.fast.Update(v)
-		slow = l.slow.Update(v)
-		macd = fast - slow
-		sig = l.signal.Update(macd)
-	}
-	return macd - sig
+	return l.UpdateAll(vs...)[2]
 }
 
 func (l *macd) UpdateAll(vs ...Decimal) []Decimal {

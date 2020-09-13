@@ -3,6 +3,7 @@ package ta // import "go.oneofone.dev/ta"
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"strings"
 	"unsafe"
 
@@ -303,6 +304,16 @@ func (ta *TA) Crossunder(o *TA) bool {
 	return ta.Get(-1) <= o.Get(-1) && ta.Get(-2) > o.Get(-2)
 }
 
+// Random fills the ta with random generated data within the given range
+// example: New(10, false).Random(42, -42, 42)
+func (ta *TA) Random(seed int64, min, max Decimal) *TA {
+	r := rand.New(rand.NewSource(seed))
+	for i := 0; i < len(ta.v); i++ {
+		ta.v[i] = decimal.RandWithSrc(r, min, max)
+	}
+	return ta
+}
+
 func (ta *TA) Fill(start, length int, v Decimal) *TA {
 	if length < 1 {
 		length = ta.Len() + length
@@ -352,6 +363,9 @@ func (ta *TA) GroupBy(fn func(idx int, v Decimal) (group bool), aggFn func(*TA) 
 	return out
 }
 
+// Agg aggregates the underlyign data to a different period
+// example hundredMinutesOfData.Agg(15, true) returns 7x 15 minutes worth of data where it gets averaged
+// alias for ta.GroupBy(func(i int, _ Decimal) bool { return i%period == period - 1 }, (*TA).Avg, inPlace)
 func (ta *TA) Agg(period int, inPlace bool) *TA {
 	mark := period - 1
 	return ta.GroupBy(func(i int, _ Decimal) bool { return i%period == mark }, (*TA).Avg, inPlace)
@@ -457,7 +471,7 @@ func (ta *TA) Format(f fmt.State, c rune) {
 
 	for i := 0; i < ta.Len(); i++ {
 		if i > 0 {
-			io.WriteString(f, ", ")
+			io.WriteString(f, " ")
 		}
 		v := ta.Get(i).Text(byte(c), prec)
 		if w := wid - len(v); w > 0 {
