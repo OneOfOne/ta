@@ -28,3 +28,4 @@ _testmain.go
 .vscode
 .python-version
 old/
+old_*.go

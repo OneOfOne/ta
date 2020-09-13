@@ -15,7 +15,6 @@ func RSI(period, oversold, overbought int) Strategy {
 }
 
 type rsi struct {
-	dummyStrategy
 	rsi        ta.Study
 	oversold   Decimal
 	overbought Decimal
@@ -24,7 +23,8 @@ type rsi struct {
 	dir        int8
 }
 
-func (r *rsi) Update(v Decimal) {
+func (r *rsi) Update(t *Tick) (buy, sell bool) {
+	v := t.Price
 	v = r.rsi.Update(v)
 	switch {
 	case r.idx > 0:
@@ -37,14 +37,8 @@ func (r *rsi) Update(v Decimal) {
 		r.dir = 0
 	}
 	r.last = v
-}
 
-func (r *rsi) ShouldBuy() bool {
-	return r.dir > 0
-}
-
-func (r *rsi) ShouldSell() bool {
-	return r.dir < 0
+	return r.dir > 0, r.dir < 0
 }
 
 func MACD(fastPeriod, slowPeriod, signalPeriod int) Strategy {
@@ -88,17 +82,15 @@ func MACDMulti(resistance int, fast, slow, signal ta.MovingAverage) Strategy {
 }
 
 type macd struct {
-	dummyStrategy
-	macd ta.StudyMulti
+	macd ta.Study
 	last Decimal
 	res  int
 	idx  int
 	dir  int
 }
 
-func (r *macd) Update(v Decimal) {
-	out := r.macd.Update(v)
-	v = out[2]
+func (r *macd) Update(t *Tick) (buy, sell bool) {
+	v := r.macd.Update(t.Price)
 
 	switch {
 	case r.idx > 0:
@@ -114,13 +106,7 @@ func (r *macd) Update(v Decimal) {
 	default:
 		r.dir = 0
 	}
+
 	r.last = v
-}
-
-func (r *macd) ShouldBuy() bool {
-	return r.dir > r.res
-}
-
-func (r *macd) ShouldSell() bool {
-	return r.dir < -r.res
+	return r.dir > r.res, r.dir < -r.res
 }

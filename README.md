@@ -1,10 +1,7 @@
-# ta
-
-[![PkgGoDev](https://pkg.go.dev/badge/go.oneofone.dev/ta@master)](https://pkg.go.dev/go.oneofone.dev/ta@master?tab=doc#pkg-constants)
-[![testing](https://github.com/OneOfOne/ta/workflows/testing/badge.svg)](https://github.com/OneOfOne/ta/actions)
-[![Coverage Status](https://coveralls.io/repos/github/OneOfOne/ta/badge.svg?branch=master)](https://coveralls.io/github/OneOfOne/ta?branch=master)
+# go.oneofone.dev/ta [![Documentation](https://pkg.go.dev/badge/go.oneofone.dev/ta)](https://pkg.go.dev/go.oneofone.dev/ta@master?tab=doc#pkg-constants) [![Testing status](https://github.com/OneOfOne/ta/workflows/testing/badge.svg)](https://github.com/OneOfOne/ta/actions) [![Coverage Status](https://coveralls.io/repos/github/OneOfOne/ta/badge.svg?branch=master)](https://coveralls.io/github/OneOfOne/ta?branch=master) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![Go Report Card](https://goreportcard.com/badge/go.oneofone.dev/ta)](https://goreportcard.com/report/go.oneofone.dev/ta) ![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)
 
 A Go Technical Analysis library, mostly inspired by python's [TA-Lib](https://pypi.org/project/TA-Lib/) and the port by [markcheno](https://github.com/markcheno/go-talib).
+It Can be used for backtesting or eventually creating strategies for live trading.
 
 ## Features
 
@@ -49,16 +46,22 @@ func main() {
 }
 ```
 
+* all the `*_test.go` files should have more examples.
+
+## Dependencies
+
+* [gonum/gonum](https://github.com/gonum/gonum) (*BSD-3-Clause*)
+
 ## References
 
-Without those libraries, this wouldn't have been possible.
+Without those libraries and their documentation, this wouldn't have been possible.
 
-* [mrjbq7/ta-lib](https://github.com/mrjbq7/ta-lib) (MIT?)
-* [markcheno/go-talib](https://github.com/markcheno/go-talib) (MIT)
-* [TulipCharts/tulipindicators](https://github.com/TulipCharts/tulipindicators) (LGPL v3.0)
-* [greyblake/ta-rs](https://github.com/greyblake/ta-rs) (MIT)
-* [MattL922/black-scholes](https://github.com/MattL922/black-scholes) (MIT)
-* [MattL922/implied-volatility](https://github.com/MattL922/implied-volatility) (MIT)
+* [mrjbq7/ta-lib](https://github.com/mrjbq7/ta-lib) (*MIT?*)
+* [markcheno/go-talib](https://github.com/markcheno/go-talib) (M*IT*)
+* [TulipCharts/tulipindicators](https://github.com/TulipCharts/tulipindicators) (*LGPL v3.0*)
+* [greyblake/ta-rs](https://github.com/greyblake/ta-rs) (*MIT*)
+* [MattL922/black-scholes](https://github.com/MattL922/black-scholes) (*MIT*)
+* [MattL922/implied-volatility](https://github.com/MattL922/implied-volatility) (*MIT*)
 
 ## License
 

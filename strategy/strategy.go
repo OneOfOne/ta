@@ -1,9 +1,7 @@
 package strategy
 
 import (
-	"context"
-	"math"
-	"strconv"
+	"log"
 
 	"go.oneofone.dev/ta"
 	"go.oneofone.dev/ta/decimal"
@@ -11,250 +9,93 @@ import (
 
 type Decimal = decimal.Decimal
 
-type Strategy interface {
-	Update(v Decimal)
-	ShouldBuy() bool
-	ShouldSell() bool
-	NotifyBuy(o Order)
-	NotifySell(o Order)
+type Engine interface {
+	Start(onBuy, onSell func() (shares int, pricePerShare Decimal))
+	Stop() (shares int, pricePershare, availableBalance Decimal)
 }
 
-type dummyStrategy struct{}
+type Tick struct {
+	Price  Decimal
+	Volume int
+}
 
-func (dummyStrategy) Update(Decimal)   { panic("not implemented") }
-func (dummyStrategy) ShouldBuy() bool  { return false }
-func (dummyStrategy) ShouldSell() bool { return false }
-func (dummyStrategy) NotifyBuy(Order)  {}
-func (dummyStrategy) NotifySell(Order) {}
+type Strategy interface {
+	Update(*Tick) (buy, sell bool)
+}
 
-type Result struct {
-	Symbol       string
-	StartBalance Decimal
-	Balance      Decimal
-
-	Orders []*Order
-
+type Tx struct {
+	PL     Decimal
+	Value  Decimal
 	Bought int
 	Sold   int
-
-	LastPrice Decimal
+	Held   int
 }
 
-func (r *Result) Total() Decimal {
-	return r.Balance + r.SharesValue()
-}
-
-func (r *Result) NumShares() (n int) {
-	for _, o := range r.Orders {
-		n += o.Count
-	}
-	return
-}
-
-func (r *Result) SharesValue() (n Decimal) {
-	for _, o := range r.Orders {
-		n += (o.Price * Decimal(o.Count))
-	}
-	return
-}
-
-// PL - Profit / Loss
-func (r *Result) PL() Decimal { return r.Total() - r.StartBalance }
-
-// PLPerc - Profit/Loss percent
-func (r *Result) PLPerc() Decimal {
-	return ((r.PL() / r.Total()) * 100).Floor(100)
-}
-
-type (
-	Order struct {
-		ID     string
-		Symbol string
-		Price  Decimal
-		Count  int
-	}
-
-	Options struct {
-		Balance         Decimal
-		Orders          []*Order
-		MaxSharesToHold int
-
-		AllowShort bool
-
-		Buy  func(r *Result) (orders []*Order)
-		Sell func(r *Result, o Order) (pricePerShare Decimal)
-	}
-)
-
-func ApplyLive(ctx context.Context, str Strategy, symbol string, input <-chan Decimal, opts Options) <-chan *Result {
-	res := make(chan *Result, 1)
-	if opts.Balance < 1 {
-		panic("balance < 1")
-	}
-
-	if opts.MaxSharesToHold == 0 {
-		opts.MaxSharesToHold = int(math.MaxInt64)
-	}
-
-	done := ctx.Done()
+func ApplySlice(acc Account, str Strategy, symbol string, data *ta.TA) *Tx {
+	inp := make(chan *Tick, 1)
 	go func() {
-		r := &Result{
-			Symbol:       symbol,
-			StartBalance: opts.Balance,
-			Balance:      opts.Balance,
-			Orders:       append([]*Order(nil), opts.Orders...),
+		for i := 0; i < data.Len(); i++ {
+			inp <- &Tick{Price: data.Get(i)}
 		}
+		close(inp)
+	}()
+	var last *Tx
+	for t := range Apply(acc, str, symbol, inp) {
+		last = &t
+	}
+	return last
+}
 
-		defer func() {
-			res <- r
-			close(res)
-		}()
-
-	L:
-		select {
-		case v, ok := <-input:
-			if !ok {
-				return
-			}
-			r.LastPrice = v
-			str.Update(v)
-
-			shouldBuy := str.ShouldBuy() && r.Balance > v && r.NumShares() < opts.MaxSharesToHold
-			shouldSell := str.ShouldSell() && (len(r.Orders) > 0 || opts.AllowShort)
-
+func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx {
+	ch := make(chan Tx, len(src))
+	go func() {
+		defer close(ch)
+		var (
+			tx   Tx
+			last *Tick
+		)
+		tx.Held = acc.Shares(symbol)
+		for t := range src {
+			last = t
+			shouldBuy, shouldSell := str.Update(t)
 			if shouldBuy && shouldSell {
+				log.Printf("[strategy] %T.Update() returned both buy and sell", str)
 				shouldBuy = false
 			}
 
-			switch {
-			case shouldBuy:
-				bought := opts.Buy(r)
-				if len(bought) == 0 {
-					goto L
+			if shouldBuy {
+				shares, pricePerShare := acc.Buy(symbol, t.Price)
+				if shares == 0 {
+					continue
 				}
-				for _, o := range bought {
-					r.Bought += o.Count
-					r.Balance -= (o.Price * Decimal(o.Count))
+				tx.Bought += shares
+				tx.Held += shares
+				tx.Value += Decimal(shares) * pricePerShare
+				select {
+				case ch <- tx:
+				default:
 				}
-				r.Orders = append(r.Orders, bought...)
-
-			case shouldSell:
-				out := r.Orders[:0]
-				for _, o := range r.Orders {
-					pricePerShare := opts.Sell(r, *o)
-					if pricePerShare == 0 {
-						out = append(out, o)
-						continue
-					}
-					r.Sold += o.Count
-					r.Balance += (pricePerShare * Decimal(o.Count))
-				}
-				r.Orders = out
-			default:
-
 			}
-		case <-done:
-			return
+
+			if shouldSell {
+				shares, pricePerShare := acc.Sell(symbol, t.Price)
+				if shares == 0 {
+					continue
+				}
+				tx.Sold += shares
+				tx.Held -= shares
+				tx.Value -= Decimal(shares) * pricePerShare
+				select {
+				case ch <- tx:
+				default:
+				}
+			}
 		}
-		goto L
+		tx.PL = tx.Value + (Decimal(tx.Held) * last.Price)
+		select {
+		case ch <- tx:
+		default:
+		}
 	}()
-	return res
-}
-
-func Apply(str Strategy, symbol string, data *ta.TA, startBalance float64, maxShares int) *Result {
-	in := make(chan Decimal, 10)
-	go func() {
-		for i := 0; i < data.Len(); i++ {
-			in <- data.Get(i)
-		}
-		close(in)
-	}()
-
-	id := 0
-
-	return <-ApplyLive(context.Background(), str, symbol, in, Options{
-		Balance:         Decimal(startBalance),
-		MaxSharesToHold: maxShares,
-
-		Buy: func(r *Result) (out []*Order) {
-			id++
-			numShares := ta.MinInt(int(r.Balance/r.LastPrice), maxShares-r.NumShares())
-			if numShares == 0 {
-				return
-			}
-			return []*Order{
-				{ID: strconv.Itoa(id), Count: numShares, Price: r.LastPrice},
-			}
-		},
-		Sell: func(r *Result, o Order) (pricePerShare Decimal) {
-			return r.LastPrice
-		},
-	})
-}
-
-func Merge(matchAll bool, strats ...Strategy) Strategy {
-	if len(strats) < 2 {
-		return strats[0]
-	}
-	return &merge{strats: strats, all: matchAll}
-}
-
-type merge struct {
-	dummyStrategy
-	strats []Strategy
-	all    bool
-}
-
-func (m *merge) Update(v Decimal) {
-	for _, s := range m.strats {
-		s.Update(v)
-	}
-}
-
-func (m *merge) ShouldBuy() bool {
-	for _, s := range m.strats {
-		if s.ShouldBuy() {
-			if !m.all {
-				return true
-			}
-		} else if m.all {
-			return false
-		}
-	}
-	return true
-}
-
-func (m *merge) ShouldSell() bool {
-	for _, s := range m.strats {
-		if s.ShouldSell() {
-			if !m.all {
-				return true
-			}
-		} else if m.all {
-			return false
-		}
-	}
-	return true
-}
-
-func Mixed(buyStrat, sellStrat Strategy) Strategy {
-	return &mixed{buy: buyStrat, sell: sellStrat}
-}
-
-type mixed struct {
-	dummyStrategy
-	buy, sell Strategy
-}
-
-func (m *mixed) Update(v Decimal) {
-	m.buy.Update(v)
-	m.sell.Update(v)
-}
-
-func (m *mixed) ShouldBuy() bool {
-	return m.buy.ShouldBuy()
-}
-
-func (m *mixed) ShouldSell() bool {
-	return m.sell.ShouldSell()
+	return ch
 }

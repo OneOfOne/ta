@@ -165,7 +165,7 @@ func (ta *TA) Slice(i, j int) *TA {
 	if j == 0 {
 		j = ln
 	} else if j < 0 {
-		j = MinInt(ln, i-j)
+		j = decimal.MinInt(ln, i-j)
 	}
 
 	if ta.idx == nil {

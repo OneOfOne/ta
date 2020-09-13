@@ -2,6 +2,7 @@ package strategy_test
 
 import (
 	"fmt"
+	"testing"
 
 	"go.oneofone.dev/ta/csvticks"
 	"go.oneofone.dev/ta/strategy"
@@ -31,17 +32,23 @@ func ExampleStrategy() {
 	closes := ticks.Close() // we only need the close data
 
 	// define a buy strategy, using either RSI or MACD
-	buyStrat := strategy.Merge(false, strategy.RSI(26, 40, 80), strategy.MACDWithResistance(10, 14, 26, 9))
+	// buyStrat := strategy.Merge(false, strategy.RSI(26, 40, 80), strategy.MACDWithResistance(10, 14, 26, 9))
+	buyStrat := strategy.MACDWithResistance(3, 14, 26, 9)
 
 	// define a sell strategy, using macd
 	sellStrat := strategy.MACDWithResistance(10, 14, 26, 9)
 	strat := strategy.Mixed(buyStrat, sellStrat)
 	// apply the strategy, initial balance is 2000 dollars, maximum shares to hold at a time is 10
-	res := strategy.Apply(strat, "AAPL", closes, 25000, 50)
+	res := strategy.ApplyX(strat, "AAPL", closes, 25000, 50)
 
 	fmt.Printf("bought: %v, sold: %v, assets (%v): $%.3f, balance left: $%.3f, total: $%.3f, gain/loss: $%.2f (%.2f%%)\n",
 		res.Bought, res.Sold, res.NumShares(), res.SharesValue(), res.Balance, res.Total(), res.PL(), res.PLPerc())
 
 	// Output:
 	// bought: 300, sold: 250, assets (50): $15773.500, balance left: $10245.355, total: $26018.855, gain/loss: $1018.86 (3.91%)
+}
+
+func TestStrategy(t *testing.T) {
+	str := strategy.RSI(18, 40, 80)
+	_ = str
 }

@@ -289,7 +289,14 @@ func (l *macd) Setup(ds ...*TA) []*TA {
 }
 
 func (l *macd) Update(vs ...Decimal) Decimal {
-	return l.UpdateAll(vs...)[2]
+	var fast, slow, macd, sig Decimal
+	for _, v := range vs {
+		fast = l.fast.Update(v)
+		slow = l.slow.Update(v)
+		macd = fast - slow
+		sig = l.signal.Update(macd)
+	}
+	return macd - sig
 }
 
 func (l *macd) UpdateAll(vs ...Decimal) []Decimal {
@@ -341,7 +348,6 @@ var (
 )
 
 type vwap struct {
-	noSingle
 	std   *variance
 	up    Decimal
 	down  Decimal
@@ -400,3 +406,6 @@ func (l *vwap) UpdateAll(vs ...Decimal) []Decimal {
 
 func (l *vwap) Len() int      { return l.std.Len() }
 func (l *vwap) LenAll() []int { return []int{l.std.Len()} }
+
+func (l *vwap) ToMulti() (MultiVarStudy, bool) { return l, true }
+func (l *vwap) ToStudy() (Study, bool)         { return l, true }

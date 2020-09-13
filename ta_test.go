@@ -15,6 +15,11 @@ import (
 	"go.oneofone.dev/ta/decimal"
 )
 
+var (
+	MaxInt = decimal.MaxInt
+	MinInt = decimal.MaxInt
+)
+
 func TestMain(m *testing.M) {
 	log.SetFlags(log.Lshortfile)
 	pyout, _ := exec.Command("python", "-c", "import talib; print('success')").Output()
@@ -104,6 +109,7 @@ func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ strin
 		macd, macdsignal, macdhist := out[0], out[1], out[2]
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
+		t.Log(macd.Slice(-5, 0), macdsignal.Slice(-5, 0), macdhist.Slice(-5, 0))
 		compare(t, macd, "result, macdsignal, macdhist = %s", pyfn)
 		compare(t, macdsignal, "macd, result, macdhist = %s", pyfn)
 		compare(t, macdhist, "macd, macdsignal, result = %s", pyfn)

@@ -45,7 +45,7 @@ type Mapping struct {
 }
 
 func (m *Mapping) init() error {
-	m.maxIndex = ta.MaxInt(m.TS.val(), m.Symbol.val(), m.Open.val(), m.High.val(), m.Low.val(), m.Close.val(), m.Volume.val())
+	m.maxIndex = decimal.MaxInt(m.TS.val(), m.Symbol.val(), m.Open.val(), m.High.val(), m.Low.val(), m.Close.val(), m.Volume.val())
 	if m.maxIndex == -1 {
 		return ErrMissingMapping
 	}
