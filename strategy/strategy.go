@@ -24,11 +24,27 @@ type Strategy interface {
 }
 
 type Tx struct {
-	PL     Decimal
-	Value  Decimal
-	Bought int
-	Sold   int
-	Held   int
+	initial   Decimal
+	Value     Decimal
+	LastPrice Decimal
+	Bought    int
+	Sold      int
+	Shorted   int
+	Held      int
+}
+
+func (t *Tx) Total() Decimal {
+	return t.Value + (Decimal(t.Held) * t.LastPrice)
+}
+
+// PL - Profit / Loss
+func (t *Tx) PL() Decimal {
+	return t.Total() - t.initial
+}
+
+// PLPerc - Profit/Loss percent
+func (t *Tx) PLPerc() Decimal {
+	return ((t.PL() / t.Total()) * 100).Floor(100)
 }
 
 func ApplySlice(acc Account, str Strategy, symbol string, data *ta.TA) *Tx {
@@ -50,14 +66,17 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx
 	ch := make(chan Tx, len(src))
 	go func() {
 		defer close(ch)
-		var (
-			tx   Tx
-			last *Tick
-		)
-		tx.Held = acc.Shares(symbol)
+		initial, _, _ := acc.Balance()
+		tx := Tx{
+			initial: initial,
+			Held:    acc.Shares(symbol),
+		}
 		for t := range src {
-			last = t
 			shouldBuy, shouldSell := str.Update(t)
+			if tx.LastPrice == 0 {
+				tx.Value = tx.initial + (Decimal(tx.Held) * t.Price)
+			}
+			tx.LastPrice = t.Price
 			if shouldBuy && shouldSell {
 				log.Printf("[strategy] %T.Update() returned both buy and sell", str)
 				shouldBuy = false
@@ -70,7 +89,7 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx
 				}
 				tx.Bought += shares
 				tx.Held += shares
-				tx.Value += Decimal(shares) * pricePerShare
+				tx.Value -= Decimal(shares) * pricePerShare
 				select {
 				case ch <- tx:
 				default:
@@ -84,14 +103,14 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx
 				}
 				tx.Sold += shares
 				tx.Held -= shares
-				tx.Value -= Decimal(shares) * pricePerShare
+				tx.Value += Decimal(shares) * pricePerShare
 				select {
 				case ch <- tx:
 				default:
 				}
 			}
 		}
-		tx.PL = tx.Value + (Decimal(tx.Held) * last.Price)
+
 		select {
 		case ch <- tx:
 		default:

@@ -2,6 +2,7 @@ package strategy_test
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"go.oneofone.dev/ta/csvticks"
@@ -9,6 +10,8 @@ import (
 )
 
 func ExampleStrategy() {
+	rand.Seed(42)
+
 	const fname = "../testdata/AAPL.txt.gz"
 	defer csvticks.SetDefaultTimeFormat(csvticks.SetDefaultTimeFormat("2006-01-02 15:04:05"))
 
@@ -29,23 +32,33 @@ func ExampleStrategy() {
 		panic(err)
 	}
 
-	closes := ticks.Close() // we only need the close data
+	acc := strategy.NewAccount("10F1", strategy.AccountOptions{
+		BuyingPower:        2000,
+		MaxSharesPerSymbol: 10,
+		CanShort:           false,
+		ReuseCash:          true,
+	})
+
+	// we only need the close data
+	closes := ticks.Close()
 
 	// define a buy strategy, using either RSI or MACD
-	// buyStrat := strategy.Merge(false, strategy.RSI(26, 40, 80), strategy.MACDWithResistance(10, 14, 26, 9))
-	buyStrat := strategy.MACDWithResistance(3, 14, 26, 9)
+	buyStrat := strategy.Merge(strategy.RSI(26, 40, 80), strategy.MACDWithResistance(5, 14, 26, 9))
 
 	// define a sell strategy, using macd
 	sellStrat := strategy.MACDWithResistance(10, 14, 26, 9)
-	strat := strategy.Mixed(buyStrat, sellStrat)
-	// apply the strategy, initial balance is 2000 dollars, maximum shares to hold at a time is 10
-	res := strategy.ApplyX(strat, "AAPL", closes, 25000, 50)
 
-	fmt.Printf("bought: %v, sold: %v, assets (%v): $%.3f, balance left: $%.3f, total: $%.3f, gain/loss: $%.2f (%.2f%%)\n",
-		res.Bought, res.Sold, res.NumShares(), res.SharesValue(), res.Balance, res.Total(), res.PL(), res.PLPerc())
+	// we're using different strategies for buying and selling
+	strat := strategy.Mixed(buyStrat, sellStrat)
+
+	// apply the strategy, initial balance is 2000 dollars, maximum shares to hold at a time is 10
+	res := strategy.ApplySlice(acc, strat, "AAPL", closes)
+	bp, hold, sv := acc.Balance()
+	fmt.Printf("bought: %v, sold: %v, assets (%v): $%.2f, balance left: $%.2f ($%.2f on hold), total: $%.2f, profit/loss: $%.2f (%.2f%%)\n",
+		res.Bought, res.Sold, res.Held, sv, bp, hold, res.Total(), res.PL(), res.PLPerc())
 
 	// Output:
-	// bought: 300, sold: 250, assets (50): $15773.500, balance left: $10245.355, total: $26018.855, gain/loss: $1018.86 (3.91%)
+	// bought: 24, sold: 18, assets (6): $1894.68, balance left: $217.78 ($0.00 on hold), total: $2088.28, profit/loss: $88.28 (4.22%)
 }
 
 func TestStrategy(t *testing.T) {
