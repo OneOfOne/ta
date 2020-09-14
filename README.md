@@ -1,4 +1,11 @@
-# go.oneofone.dev/ta [![Documentation](https://pkg.go.dev/badge/go.oneofone.dev/ta)](https://pkg.go.dev/go.oneofone.dev/ta@master?tab=doc#pkg-constants) [![Testing status](https://github.com/OneOfOne/ta/workflows/testing/badge.svg)](https://github.com/OneOfOne/ta/actions) [![Coverage Status](https://coveralls.io/repos/github/OneOfOne/ta/badge.svg?branch=master)](https://coveralls.io/github/OneOfOne/ta?branch=master) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![Go Report Card](https://goreportcard.com/badge/go.oneofone.dev/ta)](https://goreportcard.com/report/go.oneofone.dev/ta) ![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)
+# go.oneofone.dev/ta
+
+[![Documentation](https://pkg.go.dev/badge/go.oneofone.dev/ta)](https://pkg.go.dev/go.oneofone.dev/ta@master?tab=doc#pkg-constants)
+[![Testing status](https://github.com/OneOfOne/ta/workflows/testing/badge.svg)](https://github.com/OneOfOne/ta/actions)
+[![Coverage Status](https://coveralls.io/repos/github/OneOfOne/ta/badge.svg?branch=master)](https://coveralls.io/github/OneOfOne/ta?branch=master)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![Go Report Card](https://goreportcard.com/badge/go.oneofone.dev/ta)](https://goreportcard.com/report/go.oneofone.dev/ta)
+![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)
 
 A Go Technical Analysis library, mostly inspired by python's [TA-Lib](https://pypi.org/project/TA-Lib/) and the port by [markcheno](https://github.com/markcheno/go-talib).
 It Can be used for backtesting or eventually creating strategies for live trading.
