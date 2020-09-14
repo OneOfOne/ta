@@ -2,16 +2,13 @@ package strategy_test
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"go.oneofone.dev/ta/csvticks"
 	"go.oneofone.dev/ta/strategy"
 )
 
-func ExampleStrategy() {
-	rand.Seed(42)
-
+func TestStrategy(t *testing.T) {
 	const fname = "../testdata/AAPL.txt.gz"
 	defer csvticks.SetDefaultTimeFormat(csvticks.SetDefaultTimeFormat("2006-01-02 15:04:05"))
 
@@ -56,12 +53,7 @@ func ExampleStrategy() {
 	bp, hold, sv := acc.Balance()
 	fmt.Printf("bought: %v, sold: %v, assets (%v): $%.2f, balance left: $%.2f ($%.2f on hold), total: $%.2f, profit/loss: $%.2f (%.2f%%)\n",
 		res.Bought, res.Sold, res.Held, sv, bp, hold, res.Total(), res.PL(), res.PLPerc())
-
-	// Output:
-	// bought: 24, sold: 18, assets (6): $1894.68, balance left: $217.78 ($0.00 on hold), total: $2088.28, profit/loss: $88.28 (4.22%)
-}
-
-func TestStrategy(t *testing.T) {
-	str := strategy.RSI(18, 40, 80)
-	_ = str
+	if res.PLPerc() < 2 {
+		t.Fatal("res.PLPerc() < 2")
+	}
 }

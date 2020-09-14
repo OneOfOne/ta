@@ -33,7 +33,7 @@ jobs:
 
     - name: Run Tests
       shell: bash -l {0}
-      run: go test -v -covermode=atomic -coverprofile=profile.cov ./...
+      run: go test -covermode=atomic -coverprofile=profile.cov ./...
 
     - name: Coverage
       uses: shogo82148/actions-goveralls@v1
