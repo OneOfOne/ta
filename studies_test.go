@@ -1,6 +1,9 @@
 package ta
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func wrapMA(ma MovingAverageFunc) func(p int) Study {
 	return func(p int) Study {
@@ -13,9 +16,16 @@ func TestWMA(t *testing.T)  { testMA(t, "WMA", WMA, -1) }
 func TestDEMA(t *testing.T) { testMA(t, "DEMA", DEMA, 36) }
 func TestTEMA(t *testing.T) { testMA(t, "TEMA", TEMA, 32) }
 
-func TestRSI(t *testing.T)    { testStudy(t, "RSI", RSI, -1) }
-func TestVar(t *testing.T)    { testStudy(t, "VAR", Variance, -1) }
+func TestRSI(t *testing.T) { testStudy(t, "RSI", RSI, -1) }
+func TestVar(t *testing.T) {
+	vari := func(period int) Study {
+		return Variance(period)
+	}
+	testStudy(t, "VAR", vari, -1)
+}
 func TestStdDev(t *testing.T) { testStudy(t, "STDDEV", StdDev, -1) }
+func TestMin(t *testing.T)    { testStudy(t, "MIN", Min, -1) }
+func TestMax(t *testing.T)    { testStudy(t, "MAX", Max, -1) }
 
 func TestMACD(t *testing.T) {
 	t.Parallel()
@@ -27,6 +37,29 @@ func TestMACD(t *testing.T) {
 		testMACD(t, ts[0], ts[1], ts[2], DEMA, "DEMA")
 		testMACD(t, ts[0], ts[1], ts[2], TEMA, "TEMA")
 	}
+}
+
+func TestBBands(t *testing.T) {
+	t.Parallel()
+	tests := &[...]*[2]Decimal{
+		{1.0, 1.0},
+		{1.0, 2.0},
+		{2.0, 1.0},
+		{2.0, 2.0},
+		{3.0, 4.0},
+	}
+
+	var wg sync.WaitGroup
+	for _, ts := range tests {
+		for _, p := range &[...]int{2, 5, 10, 20} {
+			testBBands(t, &wg, p, ts[0], ts[1], SMA, "SMA")
+			testBBands(t, &wg, p, ts[0], ts[1], EMA, "EMA")
+			testBBands(t, &wg, p, ts[0], ts[1], WMA, "WMA")
+			testBBands(t, &wg, p, ts[0], ts[1], DEMA, "DEMA")
+			testBBands(t, &wg, p, ts[0], ts[1], TEMA, "TEMA")
+		}
+	}
+	wg.Wait()
 }
 
 func TestVWAP(t *testing.T) {
@@ -55,4 +88,10 @@ func TestVWAP(t *testing.T) {
 	if last = vw[0].Last(); last != 268.75 {
 		t.Fatalf("expected 268.75, got %v", last)
 	}
+
+	bb := ApplyMultiVarStudy(BBands(10), testClose)
+	t.Log(len(bb))
+	t.Log(bb[0])
+	t.Log(bb[1])
+	t.Log(bb[2])
 }

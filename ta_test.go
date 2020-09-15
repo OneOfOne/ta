@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"go.oneofone.dev/ta/decimal"
@@ -78,7 +79,6 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 		}
 	}
 
-	l := pyres.Len()
 	if res.Len() < pyres.Len() {
 		pyres = pyres.Slice(-res.Len(), 0)
 	}
@@ -89,18 +89,18 @@ func compare(t *testing.T, res *TA, taCall string, args ...interface{}) {
 			gr = 0.0
 		}
 
-		if !decimal.EqualApprox(gr.Float(), pr.Float(), 1e-6) {
-			ii, jj := MaxInt(0, i-2), MinInt(res.Len(), i+2)
-			t.Logf("%d : %d", res.Len(), l)
-			t.Log(res.Slice(-5, 0))
-			t.Log(pyres.Slice(-5, 0))
-			t.Fatalf("[@%d] got %#v, expected %#v (diff %.20f)\ngo[%d:%d]: %v\npy[%d:%d]: %v",
-				i, gr, pr, gr.Sub(pr).Abs(),
-				ii, jj,
-				res.Slice(ii, jj),
-				ii, jj,
-				pyres.Slice(ii, jj))
+		if decimal.EqualApprox(gr.Float(), pr.Float(), 1e-6) {
+			continue
 		}
+		ii, jj := MaxInt(0, i-2), MinInt(res.Len(), i+2)
+		t.Logf("last 5\n\tgo: %v\n\tpy: %v", res.Slice(-5, 0), pyres.Slice(-5, 0))
+		t.Fatalf("[@%d] got %#v, expected %#v (diff %.20f)\ngo[%d:%d]: %v\npy[%d:%d]: %v",
+			i, gr, pr, gr.Sub(pr).Abs(),
+			ii, jj,
+			res.Slice(ii, jj),
+			ii, jj,
+			pyres.Slice(ii, jj))
+
 	}
 }
 
@@ -113,9 +113,25 @@ func testMACD(t *testing.T, fast, slow, sig int, fn MovingAverageFunc, typ strin
 		pyfn := fmt.Sprintf(`talib.MACDEXT(testClose, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s, %d, talib.MA_Type.%s)`,
 			fast, typ, slow, typ, sig, typ)
 		t.Log(macd.Slice(-5, 0), macdsignal.Slice(-5, 0), macdhist.Slice(-5, 0))
-		compare(t, macd, "result, macdsignal, macdhist = %s", pyfn)
-		compare(t, macdsignal, "macd, result, macdhist = %s", pyfn)
-		compare(t, macdhist, "macd, macdsignal, result = %s", pyfn)
+		compare(t, macd, "result,_,_ = %s", pyfn)
+		compare(t, macdsignal, "_,result,_ = %s", pyfn)
+		compare(t, macdhist, "_,_,result = %s", pyfn)
+	})
+}
+
+func testBBands(t *testing.T, wg *sync.WaitGroup, period int, devUp, devDown Decimal, fn MovingAverageFunc, typ string) {
+	wg.Add(1)
+	go t.Run(fmt.Sprintf("%s:%v:%v:%v", typ, period, devUp, devDown), func(t *testing.T) {
+		defer wg.Done()
+		bb := ApplyMultiVarStudy(BollingerBands(period, devUp, devDown, fn), testClose)
+		upper, middle, lower := bb[0], bb[1], bb[2]
+		if typ != "" {
+			typ = "talib.MA_Type." + typ
+		}
+		byfn := fmt.Sprintf("talib.BBANDS(testClose, %d, %f, %f, %s)", period, devUp, devDown, typ)
+		compare(t, upper, "result,_,_ = %s", byfn)
+		compare(t, middle, "_,result,_ = %s", byfn)
+		compare(t, lower, "_,_,result = %s", byfn)
 	})
 }
 

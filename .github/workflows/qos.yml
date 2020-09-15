@@ -19,6 +19,7 @@ jobs:
     - name: Install Python Deps
       shell: bash -l {0}
       run: |
+        conda update -n base -c defaults conda
         conda install -c quantopian ta-lib
 
     - name: Install Go Deps
@@ -48,7 +49,7 @@ jobs:
         - uses: shogo82148/actions-goveralls@v1
           with:
             parallel-finished: true
-        - name: Install Python Deps
+        - name: Poke proxy.golang.org
           shell: bash -l {0}
           run: |
             cd $(mktemp -d)

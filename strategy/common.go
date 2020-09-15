@@ -23,22 +23,28 @@ type rsi struct {
 	dir        int8
 }
 
-func (r *rsi) Update(t *Tick) (buy, sell bool) {
-	v := t.Price
-	v = r.rsi.Update(v)
-	switch {
-	case r.idx > 0:
-		r.idx--
-	case decimal.Crosover(v, r.last, r.overbought):
-		r.dir = 1
-	case decimal.Crossunder(v, r.last, r.oversold):
-		r.dir = -1
-	default:
-		r.dir = 0
+func (s *rsi) Setup(candles []*Candle) {
+	for _, c := range candles {
+		s.rsi.Update(c.Close)
 	}
-	r.last = v
+}
 
-	return r.dir > 0, r.dir < 0
+func (s *rsi) Update(c *Candle) (buy, sell bool) {
+	v := c.Close
+	v = s.rsi.Update(v)
+	switch {
+	case s.idx > 0:
+		s.idx--
+	case decimal.Crosover(v, s.last, s.overbought):
+		s.dir = 1
+	case decimal.Crossunder(v, s.last, s.oversold):
+		s.dir = -1
+	default:
+		s.dir = 0
+	}
+	s.last = v
+
+	return s.dir > 0, s.dir < 0
 }
 
 func MACD(fastPeriod, slowPeriod, signalPeriod int) Strategy {
@@ -89,24 +95,30 @@ type macd struct {
 	dir  int
 }
 
-func (r *macd) Update(t *Tick) (buy, sell bool) {
-	v := r.macd.Update(t.Price)
+func (s *macd) Setup(candles []*Candle) {
+	for _, c := range candles {
+		s.macd.Update(c.Close)
+	}
+}
+
+func (s *macd) Update(c *Candle) (buy, sell bool) {
+	v := s.macd.Update(c.Close)
 
 	switch {
-	case r.idx > 0:
-		r.idx--
-	case decimal.Crossunder(v, r.last, 0):
-		r.dir = -1
-	case decimal.Crosover(v, r.last, 0):
-		r.dir = 1
-	case v > r.last && r.dir > 0:
-		r.dir++
-	case v < r.last && r.dir < 0:
-		r.dir--
+	case s.idx > 0:
+		s.idx--
+	case decimal.Crossunder(v, s.last, 0):
+		s.dir = -1
+	case decimal.Crosover(v, s.last, 0):
+		s.dir = 1
+	case v > s.last && s.dir > 0:
+		s.dir++
+	case v < s.last && s.dir < 0:
+		s.dir--
 	default:
-		r.dir = 0
+		s.dir = 0
 	}
 
-	r.last = v
-	return r.dir > r.res, r.dir < -r.res
+	s.last = v
+	return s.dir > s.res, s.dir < -s.res
 }

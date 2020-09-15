@@ -276,14 +276,24 @@ func (ta *TA) Div(o *TA) *TA {
 	return cp
 }
 
-func (ta *TA) Max() (idx int, v Decimal) {
-	idx = floats.MaxIdx(ta.Floats())
-	return idx, ta.v[idx]
+func (ta *TA) Max() Decimal {
+	idx := floats.MaxIdx(ta.floats())
+	return ta.v[idx]
 }
 
-func (ta *TA) Min() (idx int, v Decimal) {
-	idx = floats.MinIdx(ta.Floats())
-	return idx, ta.v[idx]
+func (ta *TA) MaxIndex() int {
+	idx := floats.MaxIdx(ta.floats())
+	return ta.index(idx)
+}
+
+func (ta *TA) Min() Decimal {
+	idx := floats.MinIdx(ta.floats())
+	return ta.v[idx]
+}
+
+func (ta *TA) MinIndex() int {
+	idx := floats.MinIdx(ta.floats())
+	return ta.index(idx)
 }
 
 func (ta *TA) Crossover(o *TA) bool {
@@ -443,6 +453,12 @@ func (ta *TA) StdDevSum() Decimal {
 
 func (ta *TA) VarianceSum() Decimal {
 	return Decimal(stat.Variance(ta.Floats(), nil))
+}
+
+func (ta *TA) Pipe(ch chan<- Decimal) {
+	for i := 0; i < len(ta.v); i++ {
+		ch <- ta.Get(i)
+	}
 }
 
 func (ta *TA) Format(f fmt.State, c rune) {

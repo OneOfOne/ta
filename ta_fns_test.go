@@ -13,10 +13,10 @@ func TestTA(t *testing.T) {
 	r := rand.New(rand.NewSource(42))
 	ta := New(make([]float64, 100), func(float64) float64 { return r.Float64() })
 	sort.Float64Slice(ta.Floats()).Sort()
-	if idx, _ := ta.Min(); idx != 0 {
+	if idx := ta.MinIndex(); idx != 0 {
 		t.Fatalf("expected min index to be 0, got %v", idx)
 	}
-	if idx, _ := ta.Max(); idx != ta.Len()-1 {
+	if idx := ta.MaxIndex(); idx != ta.Len()-1 {
 		t.Fatalf("expected max index to be %v, got %v", ta.Len()-1, idx)
 	}
 
@@ -40,7 +40,6 @@ func TestTA(t *testing.T) {
 	}
 
 	parts := ta.Slice(0, 11).Split(3, false)
-	t.Log(ta.Slice(0, 11).Len())
 	if len(parts) != 4 {
 		t.Fatalf("expected 4 parts, got %v %v", len(parts), parts)
 	}

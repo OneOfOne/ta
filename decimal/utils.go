@@ -1,6 +1,11 @@
 package decimal
 
-import "unsafe"
+import (
+	"time"
+	"unsafe"
+
+	"gonum.org/v1/gonum/floats"
+)
 
 func AbsInt(a int) int {
 	if a < 0 {
@@ -116,4 +121,26 @@ func SliceToFloats(in []Decimal, copy bool) []float64 {
 		in = CopySlice(in)
 	}
 	return *(*[]float64)(unsafe.Pointer(&in))
+}
+
+func AggPipe(aggPeriod time.Duration, in <-chan Decimal) <-chan Decimal {
+	ch := make(chan Decimal, 100)
+	buf := make([]float64, 0, 600)
+	go func() {
+		t := time.Now()
+		for v := range in {
+			if n := time.Now(); n.Sub(t) >= aggPeriod {
+				avg := floats.Sum(buf) / float64(len(buf))
+				ch <- Decimal(avg)
+				buf, t = buf[:0], n
+			}
+			buf = append(buf, v.Float())
+		}
+		if len(buf) > 0 {
+			avg := floats.Sum(buf) / float64(len(buf))
+			ch <- Decimal(avg)
+		}
+		close(ch)
+	}()
+	return ch
 }

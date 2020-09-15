@@ -14,13 +14,17 @@ type Engine interface {
 	Stop() (shares int, pricePershare, availableBalance Decimal)
 }
 
-type Tick struct {
-	Price  Decimal
+type Candle struct {
+	Open   Decimal
+	High   Decimal
+	Low    Decimal
+	Close  Decimal
 	Volume int
 }
 
 type Strategy interface {
-	Update(*Tick) (buy, sell bool)
+	Setup(candles []*Candle)
+	Update(*Candle) (buy, sell bool)
 }
 
 type Tx struct {
@@ -48,10 +52,10 @@ func (t *Tx) PLPerc() Decimal {
 }
 
 func ApplySlice(acc Account, str Strategy, symbol string, data *ta.TA) *Tx {
-	inp := make(chan *Tick, 1)
+	inp := make(chan *Candle, 1)
 	go func() {
 		for i := 0; i < data.Len(); i++ {
-			inp <- &Tick{Price: data.Get(i)}
+			inp <- &Candle{Close: data.Get(i)}
 		}
 		close(inp)
 	}()
@@ -62,7 +66,7 @@ func ApplySlice(acc Account, str Strategy, symbol string, data *ta.TA) *Tx {
 	return last
 }
 
-func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx {
+func Apply(acc Account, str Strategy, symbol string, src <-chan *Candle) <-chan Tx {
 	ch := make(chan Tx, len(src))
 	go func() {
 		defer close(ch)
@@ -71,19 +75,19 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx
 			initial: initial,
 			Held:    acc.Shares(symbol),
 		}
-		for t := range src {
-			shouldBuy, shouldSell := str.Update(t)
+		for c := range src {
+			shouldBuy, shouldSell := str.Update(c)
 			if tx.LastPrice == 0 {
-				tx.Value = tx.initial + (Decimal(tx.Held) * t.Price)
+				tx.Value = tx.initial + (Decimal(tx.Held) * c.Close)
 			}
-			tx.LastPrice = t.Price
+			tx.LastPrice = c.Close
 			if shouldBuy && shouldSell {
 				log.Printf("[strategy] %T.Update() returned both buy and sell", str)
 				shouldBuy = false
 			}
 
 			if shouldBuy {
-				shares, pricePerShare := acc.Buy(symbol, t.Price)
+				shares, pricePerShare := acc.Buy(symbol, c.Close)
 				if shares == 0 {
 					continue
 				}
@@ -97,7 +101,7 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Tick) <-chan Tx
 			}
 
 			if shouldSell {
-				shares, pricePerShare := acc.Sell(symbol, t.Price)
+				shares, pricePerShare := acc.Sell(symbol, c.Close)
 				if shares == 0 {
 					continue
 				}

@@ -19,8 +19,9 @@ func StdDev(period int) Study {
 	return newVar(period, runStd)
 }
 
-// Variance - returns an updatable study where Update returns the variance of total values
-func Variance(period int) Study {
+// Variance - returns a multiple variable study where Update returns the variance of total values
+// UpdateAll returns [variance, stddev, mean]
+func Variance(period int) MultiVarStudy {
 	checkPeriod(period, 2)
 	return newVar(period, runVar)
 }
@@ -39,26 +40,25 @@ func newVar(period int, mode uint8) *variance {
 var _ Study = (*variance)(nil)
 
 type variance struct {
-	noMulti
 	mean *TA
 	sum  *TA
 	mode uint8
 }
 
-func (l *variance) Update(vs ...Decimal) Decimal {
+func (s *variance) Update(vs ...Decimal) Decimal {
 	var (
 		m1, m2 Decimal
-		isMean = l.mode&runMean == runMean
+		isMean = s.mode&runMean == runMean
 	)
 	for _, v := range vs {
-		l.mean.Append(v)
-		m1 = l.mean.Avg()
+		s.mean.Append(v)
+		m1 = s.mean.Avg()
 		if isMean {
 			continue
 		}
 
-		l.sum.Append(v * v)
-		m2 = l.sum.Avg()
+		s.sum.Append(v * v)
+		m2 = s.sum.Avg()
 	}
 
 	if isMean {
@@ -66,12 +66,26 @@ func (l *variance) Update(vs ...Decimal) Decimal {
 	}
 
 	v := m2 - m1*m1
-	if l.mode&runStd == runStd {
+	if s.mode&runStd == runStd {
 		v = v.Sqrt()
 	}
 	return v
 }
 
-func (l *variance) Len() int {
-	return l.mean.Len()
+func (s *variance) UpdateAll(vs ...Decimal) []Decimal {
+	var m1, m2 Decimal
+	for _, v := range vs {
+		s.mean.Append(v)
+		m1 = s.mean.Avg()
+		s.sum.Append(v * v)
+		m2 = s.sum.Avg()
+	}
+	v := m2 - m1*m1
+	return []Decimal{v, v.Sqrt(), m1}
 }
+
+func (s *variance) Len() int               { return s.mean.Len() }
+func (s *variance) LenAll() []int          { return []int{s.Len()} }
+func (s *variance) ToStudy() (Study, bool) { return s, true }
+
+func (s *variance) ToMulti() (MultiVarStudy, bool) { return s, true }

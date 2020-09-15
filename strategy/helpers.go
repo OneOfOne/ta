@@ -19,10 +19,16 @@ type merge struct {
 	matchAny bool
 }
 
-func (m *merge) Update(t *Tick) (buy, sell bool) {
+func (s *merge) Setup(candles []*Candle) {
+	for _, s := range s.strats {
+		s.Setup(candles)
+	}
+}
+
+func (s *merge) Update(t *Candle) (buy, sell bool) {
 	buys, sells := 0, 0
-	for _, s := range m.strats {
-		buy, sell = s.Update(t)
+	for _, st := range s.strats {
+		buy, sell = st.Update(t)
 		if buy {
 			buys++
 		}
@@ -30,10 +36,10 @@ func (m *merge) Update(t *Tick) (buy, sell bool) {
 			sells++
 		}
 	}
-	if m.matchAny {
+	if s.matchAny {
 		return buys > 0, sells > 0
 	}
-	return buys == len(m.strats), sells == len(m.strats)
+	return buys == len(s.strats), sells == len(s.strats)
 }
 
 func Mixed(buyStrat, sellStrat Strategy) Strategy {
@@ -44,8 +50,13 @@ type mixed struct {
 	buy, sell Strategy
 }
 
-func (m *mixed) Update(t *Tick) (buy, sell bool) {
-	buy, _ = m.buy.Update(t)
-	_, sell = m.sell.Update(t)
+func (s *mixed) Setup(candles []*Candle) {
+	s.buy.Setup(candles)
+	s.sell.Setup(candles)
+}
+
+func (s *mixed) Update(t *Candle) (buy, sell bool) {
+	buy, _ = s.buy.Update(t)
+	_, sell = s.sell.Update(t)
 	return
 }
