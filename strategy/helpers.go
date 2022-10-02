@@ -1,5 +1,10 @@
 package strategy
 
+import (
+	"fmt"
+	"strings"
+)
+
 func Merge(strats ...Strategy) Strategy {
 	if len(strats) < 2 {
 		return strats[0]
@@ -42,6 +47,19 @@ func (s *merge) Update(t *Candle) (buy, sell bool) {
 	return buys == len(s.strats), sells == len(s.strats)
 }
 
+func (s *merge) String() string {
+	var buf strings.Builder
+	buf.WriteString("Merge{")
+	for i, s := range s.strats {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		fmt.Fprintf(&buf, "%T", s)
+	}
+	buf.WriteString("}")
+	return buf.String()
+}
+
 func Mixed(buyStrat, sellStrat Strategy) Strategy {
 	return &mixed{buy: buyStrat, sell: sellStrat}
 }
@@ -59,4 +77,8 @@ func (s *mixed) Update(t *Candle) (buy, sell bool) {
 	buy, _ = s.buy.Update(t)
 	_, sell = s.sell.Update(t)
 	return
+}
+
+func (s *mixed) String() string {
+	return fmt.Sprintf("Mixed(%T, %T)", s.buy, s.sell)
 }

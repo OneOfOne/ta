@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	MaxInt = decimal.MaxInt
-	MinInt = decimal.MinInt
+	MaxInt = decimal.Max[int]
+	MinInt = decimal.Min[int]
 )
 
 func TestMain(m *testing.M) {

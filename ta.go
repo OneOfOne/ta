@@ -12,6 +12,14 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
+type Candle struct {
+	Open   Decimal
+	High   Decimal
+	Low    Decimal
+	Close  Decimal
+	Volume int
+}
+
 // Decimal is an alias to the underlying type we use.
 // For now it's mostly a wrapper around float64,
 // however it may change to big.Float in the future if higher accuracy is needed.
@@ -166,7 +174,7 @@ func (ta *TA) Slice(i, j int) *TA {
 	if j == 0 {
 		j = ln
 	} else if j < 0 {
-		j = decimal.MinInt(ln, i-j)
+		j = decimal.Min(ln, i-j)
 	}
 
 	if ta.idx == nil {

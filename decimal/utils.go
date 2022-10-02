@@ -4,24 +4,18 @@ import (
 	"time"
 	"unsafe"
 
+	"go.oneofone.dev/genh"
 	"gonum.org/v1/gonum/floats"
 )
 
-func AbsInt(a int) int {
-	if a < 0 {
-		return -a
+func Abs[T genh.Signed | genh.Float](v T) T {
+	if v < 0 {
+		return -v
 	}
-	return a
+	return v
 }
 
-func AbsInt64(a int) int {
-	if a < 0 {
-		return -a
-	}
-	return a
-}
-
-func MinInt(vs ...int) int {
+func Min[T genh.Ordered](vs ...T) T {
 	m := vs[0]
 	for i := 1; i < len(vs); i++ {
 		if v := vs[i]; v < m {
@@ -31,37 +25,7 @@ func MinInt(vs ...int) int {
 	return m
 }
 
-func MinInt64(vs ...int64) int64 {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func MinUint(vs ...uint) uint {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func MinUint64(vs ...uint64) uint64 {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func MaxInt(vs ...int) int {
+func Max[T genh.Ordered](vs ...T) T {
 	m := vs[0]
 	for i := 1; i < len(vs); i++ {
 		if v := vs[i]; v > m {
@@ -69,56 +33,18 @@ func MaxInt(vs ...int) int {
 		}
 	}
 	return m
-}
-
-func MaxInt64(vs ...int64) int64 {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v > m {
-			m = v
-		}
-	}
-	return m
-}
-
-func MaxUint(vs ...uint) uint {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v > m {
-			m = v
-		}
-	}
-	return m
-}
-
-func MaxUint64(vs ...uint64) uint64 {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v > m {
-			m = v
-		}
-	}
-	return m
-}
-
-func CopyFloats(in []float64) []float64 {
-	return append(make([]float64, 0, len(in)), in...)
-}
-
-func CopySlice(in []Decimal) []Decimal {
-	return append(make([]Decimal, 0, len(in)), in...)
 }
 
 func SliceFromFloats(in []float64, copy bool) []Decimal {
 	if copy {
-		in = CopyFloats(in)
+		in = genh.SliceClone(in)
 	}
 	return *(*[]Decimal)(unsafe.Pointer(&in))
 }
 
 func SliceToFloats(in []Decimal, copy bool) []float64 {
 	if copy {
-		in = CopySlice(in)
+		in = genh.SliceClone(in)
 	}
 	return *(*[]float64)(unsafe.Pointer(&in))
 }

@@ -3,7 +3,7 @@ package strategy
 import (
 	"log"
 
-	"go.oneofone.dev/ta"
+	"go.oneofone.dev/ta/csvticks"
 	"go.oneofone.dev/ta/decimal"
 )
 
@@ -51,11 +51,11 @@ func (t *Tx) PLPerc() Decimal {
 	return ((t.PL() / t.Total()) * 100).Floor(100)
 }
 
-func ApplySlice(acc Account, str Strategy, symbol string, data *ta.TA) *Tx {
+func ApplySlice(acc Account, str Strategy, symbol string, data csvticks.Ticks) *Tx {
 	inp := make(chan *Candle, 1)
 	go func() {
-		for i := 0; i < data.Len(); i++ {
-			inp <- &Candle{Close: data.Get(i)}
+		for _, t := range data {
+			inp <- &Candle{Close: t.Close, Volume: int(t.Volume), Open: t.Open, High: t.High, Low: t.Low}
 		}
 		close(inp)
 	}()
@@ -82,8 +82,13 @@ func Apply(acc Account, str Strategy, symbol string, src <-chan *Candle) <-chan 
 			}
 			tx.LastPrice = c.Close
 			if shouldBuy && shouldSell {
-				log.Printf("[strategy] %T.Update() returned both buy and sell", str)
-				shouldBuy = false
+				log.Printf("[strategy] %v.Update() returned both buy and sell", str)
+				if tx.Held > 0 {
+					shouldBuy = false
+				} else {
+					shouldSell = false
+				}
+
 			}
 
 			if shouldBuy {

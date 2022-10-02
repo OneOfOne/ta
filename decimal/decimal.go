@@ -140,7 +140,7 @@ func (d Decimal) Floor(unit Decimal) Decimal {
 }
 
 func (d Decimal) Round(unit Decimal) Decimal {
-	if unit == 0 || unit == 1 {
+	if unit < 2 {
 		return Decimal(math.Round(d.Float()))
 	}
 	d = d * unit
@@ -278,26 +278,6 @@ func AvgOf(vs ...Decimal) Decimal {
 		out = out.Add(v)
 	}
 	return out / Decimal(len(vs))
-}
-
-func Min(vs ...Decimal) Decimal {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v < m {
-			m = v
-		}
-	}
-	return m
-}
-
-func Max(vs ...Decimal) Decimal {
-	m := vs[0]
-	for i := 1; i < len(vs); i++ {
-		if v := vs[i]; v > m {
-			m = v
-		}
-	}
-	return m
 }
 
 func Rand(min, max Decimal) (r Decimal) {

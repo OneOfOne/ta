@@ -5,9 +5,13 @@ import (
 	"go.oneofone.dev/ta/decimal"
 )
 
-func RSI(period, oversold, overbought int) Strategy {
+func RSI(period, oversold, overbought int, fn ta.MovingAverageFunc) Strategy {
+	r := ta.RSI(period)
+	if fn != nil {
+		r = ta.RSIExt(fn(period))
+	}
 	return &rsi{
-		rsi:        ta.RSI(period),
+		rsi:        r,
 		oversold:   Decimal(oversold),
 		overbought: Decimal(overbought),
 		idx:        period,
@@ -54,12 +58,16 @@ func MACD(fastPeriod, slowPeriod, signalPeriod int) Strategy {
 	}
 }
 
-func MACDWithResistance(resistance, fastPeriod, slowPeriod, signalPeriod int) Strategy {
+func MACDWithResistance(resistance, fastPeriod, slowPeriod, signalPeriod int, fn ta.MovingAverageFunc) Strategy {
 	if resistance < 0 {
 		resistance = 0
 	}
+	m := ta.MACD(fastPeriod, slowPeriod, signalPeriod)
+	if fn != nil {
+		m = ta.MACDExt(fastPeriod, slowPeriod, signalPeriod, fn)
+	}
 	return &macd{
-		macd: ta.MACD(fastPeriod, slowPeriod, signalPeriod),
+		macd: m,
 		idx:  (fastPeriod + slowPeriod + signalPeriod) / 3,
 		res:  resistance,
 	}

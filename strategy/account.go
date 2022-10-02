@@ -146,7 +146,7 @@ func (a *account) Sell(symbol string, price Decimal) (shares int, pricePerShare 
 		return
 	}
 
-	max := decimal.MinInt(sh.count, a.opts.MaxSharesPerSymbol)
+	max := decimal.Min(sh.count, a.opts.MaxSharesPerSymbol)
 
 	if max == 0 {
 		return

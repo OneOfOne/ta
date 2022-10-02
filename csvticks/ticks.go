@@ -41,11 +41,12 @@ type Mapping struct {
 
 	FillSymbol string
 
+	Process  func(t *Tick) []*Tick
 	maxIndex int
 }
 
 func (m *Mapping) init() error {
-	m.maxIndex = decimal.MaxInt(m.TS.val(), m.Symbol.val(), m.Open.val(), m.High.val(), m.Low.val(), m.Close.val(), m.Volume.val())
+	m.maxIndex = decimal.Max(m.TS.val(), m.Symbol.val(), m.Open.val(), m.High.val(), m.Low.val(), m.Close.val(), m.Volume.val())
 	if m.maxIndex == -1 {
 		return ErrMissingMapping
 	}
@@ -150,7 +151,11 @@ func LoadReader(r io.Reader, mapping Mapping) (tks Ticks, err error) {
 			return
 		}
 
-		tks = append(tks, t)
+		if mapping.Process != nil {
+			tks = append(tks, mapping.Process(t)...)
+		} else {
+			tks = append(tks, t)
+		}
 	}
 }
 
